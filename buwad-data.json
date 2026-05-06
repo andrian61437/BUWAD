@@ -1,0 +1,17 @@
+{
+  "sensors": {
+    "temperature": 32.4,
+    "humidity": 65,
+    "sunlight": 78,
+    "rainDetected": false
+  },
+  "system": {
+    "phase": "activeflipping",
+    "nextFlip": "14:20",
+    "isPaused": false,
+    "manualOverride": false,
+    "fishProfile": "danggit"
+  },
+  "alerts": {},
+  "logs": {}
+}
