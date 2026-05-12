@@ -4,3 +4,9 @@
 .vscode/launch.json
 .vscode/ipch
 node_modules
+
+# ESP32 Secrets
+src/secrets.h
+
+# Environment variables
+.env
