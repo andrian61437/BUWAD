@@ -55,11 +55,13 @@ function AppContent() {
   });
   const [systemState, setSystemState] = useState({
     phase: 'activeflipping', nextFlip: 0, isPaused: false,
-    manualOverride: false, dryingMode: 'danggit', flipMode: 'timer'
+    manualOverride: false, dryingMode: 'danggit', flipMode: 'timer',
+    coverClosed: false
   });
   const [alerts, setAlerts] = useState([]);
   const [activityLogs, setActivityLogs] = useState([]);
   const [toast, setToast] = useState(null);
+  const [dismissedAlertIds, setDismissedAlertIds] = useState([]);
   
   const localLogIdsRef = useRef(new Set());
   const foregroundUnsubscribeRef = useRef(null);
@@ -129,29 +131,37 @@ function AppContent() {
     setSystemState(prev => ({ ...prev, manualOverride: true }));
     addLogEntry({ action: 'FLIP NOW', details: 'Manual flip triggered' });
     writeToSystem({ manualFlip: true, lcdMessage: "Manual Flip|FLIPPING NOW..." });
-    
-    setTimeout(() => {
-      setSystemState(prev => ({ ...prev, manualOverride: false }));
-    }, 3000);
+    setTimeout(() => { setSystemState(prev => ({ ...prev, manualOverride: false })); }, 3000);
   }, [addLogEntry, writeToSystem]);
+
+  const handleCoverToggle = useCallback(() => {
+    const isCurrentlyClosed = systemState.coverClosed;
+    addLogEntry({ action: 'COVER NOW', details: isCurrentlyClosed ? 'Opening cover' : 'Closing cover' });
+    writeToSystem({ manualCover: true, lcdMessage: isCurrentlyClosed ? "Cover Now|COVER OPENED" : "Cover Now|COVER CLOSED" });
+  }, [systemState.coverClosed, addLogEntry, writeToSystem]);
   
   const handleDryingModeToggle = useCallback((mode) => {
     setSystemState(prev => prev.dryingMode === mode ? prev : { ...prev, dryingMode: mode });
     addLogEntry({ action: 'DRYING MODE CHANGED', details: `Switched to ${mode}`, sensorValues: { profile: mode, cycleInterval: mode === 'danggit' ? '15s' : '10s' } });
-    writeToSystem({ 
-      dryingMode: mode,
-      lcdMessage: mode === 'danggit' ? "Switching to|DANGGIT" : "Switching to|BOLINAO"
-    });
+    writeToSystem({ dryingMode: mode, lcdMessage: mode === 'danggit' ? "Switching to|DANGGIT" : "Switching to|BOLINAO" });
   }, [addLogEntry, writeToSystem]);
 
   const handleFlipModeToggle = useCallback((mode) => {
     setSystemState(prev => prev.flipMode === mode ? prev : { ...prev, flipMode: mode });
     addLogEntry({ action: 'FLIP MODE CHANGED', details: `Switched to ${mode}` });
-    writeToSystem({ 
-      flipMode: mode,
-      lcdMessage: mode === 'environment' ? "Switching to|ENV-BASED" : "Switching to|TIMER-BASED"
-    });
+    writeToSystem({ flipMode: mode, lcdMessage: mode === 'environment' ? "Switching to|ENV-BASED" : "Switching to|TIMER-BASED" });
   }, [addLogEntry, writeToSystem]);
+
+  const handleDismissAlert = useCallback((alertId) => {
+    setDismissedAlertIds(prev => prev.includes(alertId) ? prev : [...prev, alertId]);
+  }, []);
+
+  const handleDismissAllAlerts = useCallback((alertIds) => {
+    setDismissedAlertIds(prev => {
+      const merged = new Set([...prev, ...alertIds]);
+      return [...merged];
+    });
+  }, []);
 
   const handleToggleNotifications = useCallback(async () => {
     if (notificationsEnabled) {
@@ -217,10 +227,15 @@ function AppContent() {
     if (!database) return;
     const unsubSensors = onValue(ref(database, 'sensors'), (snapshot) => {
       const data = snapshot.val();
-      if (data?.temperature && data.temperature !== 0) {
-        setSensorData({ temperature: data.temperature, humidity: data.humidity || 65, sunlight: data.sunlight || 78, rainDetected: data.rainDetected || false });
-        setHasRealData(true);
-      } else { setHasRealData(false); }
+      if (data) {
+        setSensorData({ 
+          temperature: data.temperature || 25.0, 
+          humidity: data.humidity || 50, 
+          sunlight: data.sunlight || 50, 
+          rainDetected: data.rainDetected || false 
+        });
+        setHasRealData(data.sunlight > 0 || data.humidity > 0 || data.temperature > 0);
+      }
     });
     const unsubSystem = onValue(ref(database, 'system'), (snapshot) => {
       if (ignoreNextSystemUpdateRef.current) return;
@@ -233,7 +248,8 @@ function AppContent() {
         isPaused: data.isPaused !== undefined ? data.isPaused : prev.isPaused,
         manualOverride: prev.manualOverride,
         dryingMode: data.dryingMode || prev.dryingMode,
-        flipMode: data.flipMode || prev.flipMode
+        flipMode: data.flipMode || prev.flipMode,
+        coverClosed: data.coverClosed !== undefined ? data.coverClosed : prev.coverClosed
       }));
     });
     const unsubAlerts = onValue(ref(database, 'alerts'), (snapshot) => {
@@ -321,8 +337,8 @@ function AppContent() {
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
               {activeTab === 'dashboard' && <Dashboard sensorData={sensorData} systemState={systemState} sunlightLabel={getSunlightLabel()} formatCountdown={formatCountdown} t={t} onSystemToggle={handleSystemPowerToggle} isSystemOn={isSystemPoweredOn} />}
-              {activeTab === 'controls' && <Controls dryingMode={systemState.dryingMode} flipMode={systemState.flipMode} onDryingModeToggle={handleDryingModeToggle} onFlipModeToggle={handleFlipModeToggle} onManualOverride={handleManualOverride} t={t} />}
-              {activeTab === 'alerts' && <Alerts alerts={alerts} rainDetected={sensorData.rainDetected} t={t} />}
+              {activeTab === 'controls' && <Controls dryingMode={systemState.dryingMode} flipMode={systemState.flipMode} coverClosed={systemState.coverClosed} onDryingModeToggle={handleDryingModeToggle} onFlipModeToggle={handleFlipModeToggle} onManualOverride={handleManualOverride} onCoverToggle={handleCoverToggle} t={t} />}
+              {activeTab === 'alerts' && <Alerts alerts={alerts} rainDetected={sensorData.rainDetected} dismissedIds={dismissedAlertIds} onDismiss={handleDismissAlert} onDismissAll={handleDismissAllAlerts} t={t} />}
               {activeTab === 'logs' && <Logs activityLogs={activityLogs} t={t} />}
             </motion.div>
           </AnimatePresence>

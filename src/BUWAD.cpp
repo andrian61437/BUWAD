@@ -41,12 +41,15 @@ float humidity = 0;
 int sunlight = 0;
 bool rainDetected = false;
 bool lastRainState = false;
+float lastGoodTemp = 25.0;
+float lastGoodHumidity = 50.0;
 
 String dryingMode = "danggit";
 String flipMode = "timer";
 bool powerOn = true;
 bool isPaused = false;
 bool flipState = false;
+bool coverClosed = false;
 unsigned long lastPublish = 0;
 unsigned long lastFlip = 0;
 unsigned long lastSensorRead = 0;
@@ -54,9 +57,8 @@ unsigned long lastLCDUpdate = 0;
 unsigned long lastSettingsCheck = 0;
 
 // LCD message override
-String lcdOverrideMessage = "";
-unsigned long lcdOverrideEnd = 0;
 bool lcdOverrideActive = false;
+unsigned long lcdOverrideEnd = 0;
 
 // LCD display pages
 int lcdPage = 0;
@@ -79,6 +81,8 @@ String getTimestamp();
 void initLCD();
 void updateLCD();
 void showLCDMessage(String line1, String line2, unsigned long durationMs);
+void closeCover();
+void openCover();
 
 // ===== SETUP =====
 void setup() {
@@ -99,6 +103,7 @@ void setup() {
   coverServo.attach(SERVO_COVER);
   flipServo.write(0);
   coverServo.write(0);
+  coverClosed = false;
   Serial.println("✓ Servos initialized");
   
   lcd.setCursor(0, 1);
@@ -143,17 +148,28 @@ void showLCDMessage(String line1, String line2, unsigned long durationMs) {
   lcdOverrideEnd = millis() + durationMs;
 }
 
+void closeCover() {
+  coverServo.write(180);
+  coverClosed = true;
+  Serial.println("🛡️ Cover CLOSED");
+}
+
+void openCover() {
+  coverServo.write(0);
+  coverClosed = false;
+  Serial.println("🛡️ Cover OPENED");
+}
+
 void updateLCD() {
   unsigned long now = millis();
   
-  // If override is active, check if it's expired
   if (lcdOverrideActive) {
     if (now >= lcdOverrideEnd) {
       lcdOverrideActive = false;
       lcd.clear();
       lastPageChange = 0;
     } else {
-      return; // Keep showing override message
+      return;
     }
   }
   
@@ -179,7 +195,7 @@ void updateLCD() {
       lcd.setCursor(0, 0);
       lcd.print("T:"); lcd.print(temperature, 1); lcd.print("C  H:"); lcd.print(humidity, 0); lcd.print("%");
       lcd.setCursor(0, 1);
-      lcd.print("Sun:"); lcd.print(sunlight); lcd.print("%   Rain:"); lcd.print(rainDetected ? "WET" : "DRY");
+      lcd.print("Sun:"); lcd.print(sunlight); lcd.print("%   NPM Rain:"); lcd.print(rainDetected ? "W" : "D");
       break;
     case 1:
       lcd.setCursor(0, 0);
@@ -191,6 +207,7 @@ void updateLCD() {
       lcd.setCursor(0, 0);
       if (isPaused) lcd.print("PAUSED        ");
       else if (rainDetected) lcd.print("RAIN MODE     ");
+      else if (coverClosed) lcd.print("COVER CLOSED  ");
       else lcd.print("POWER: ON     ");
       
       lcd.setCursor(0, 1);
@@ -212,6 +229,13 @@ void updateLCD() {
 
 void loop() {
   unsigned long now = millis();
+  
+  if (now - lastPublish > 30000 && firebaseOK) {
+    Serial.println("⚠️ Watchdog: No publish for 30s - reconnecting Firebase...");
+    firebaseOK = false;
+    connectFirebase();
+    lastPublish = millis();
+  }
   
   if (now - lastSensorRead >= SENSOR_INTERVAL) {
     readSensors();
@@ -247,11 +271,9 @@ void loop() {
 void checkSettings() {
   if (!firebaseOK) return;
   
-  // Check lcdMessage first
   if (Firebase.RTDB.getString(&fbdo, "system/lcdMessage")) {
     String msg = fbdo.stringData();
     if (msg.length() > 0) {
-      // Format: "LINE1|LINE2" or just "LINE1"
       int separator = msg.indexOf('|');
       String line1, line2;
       if (separator > 0) {
@@ -266,7 +288,6 @@ void checkSettings() {
     }
   }
   
-  // Check powerOn
   if (Firebase.RTDB.getBool(&fbdo, "system/powerOn")) {
     bool newPower = fbdo.boolData();
     if (newPower != powerOn) {
@@ -282,7 +303,6 @@ void checkSettings() {
     }
   }
   
-  // Check dryingMode
   if (Firebase.RTDB.getString(&fbdo, "system/dryingMode")) {
     String newMode = fbdo.stringData();
     if (newMode.length() > 0 && (newMode == "danggit" || newMode == "bolinao") && newMode != dryingMode) {
@@ -294,7 +314,6 @@ void checkSettings() {
     }
   }
   
-  // Check flipMode
   if (Firebase.RTDB.getString(&fbdo, "system/flipMode")) {
     String newMode = fbdo.stringData();
     if (newMode.length() > 0 && (newMode == "timer" || newMode == "environment") && newMode != flipMode) {
@@ -305,24 +324,51 @@ void checkSettings() {
     }
   }
   
-  // Check manualFlip
   if (Firebase.RTDB.getBool(&fbdo, "system/manualFlip")) {
     bool shouldFlip = fbdo.boolData();
     if (shouldFlip) {
-      Serial.println(">>> MANUAL FLIP TRIGGERED! <<<");
+      Serial.println(">>> MANUAL FLIP REQUESTED! <<<");
       Firebase.RTDB.setBool(&fbdo, "system/manualFlip", false);
       
-      if (powerOn && !isPaused && !rainDetected) {
+      if (coverClosed) {
+        Serial.println("❌ Flip blocked - Cover is closed (safety)");
+        showLCDMessage("Flip Blocked", "Cover is Closed", 2000);
+        addLog("FLIP_BLOCKED", "Cover closed - safety lock");
+      } else if (!powerOn) {
+        Serial.println("❌ Flip blocked - Power OFF");
+        showLCDMessage("Flip Blocked", "System is OFF", 2000);
+      } else if (isPaused) {
+        Serial.println("❌ Flip blocked - Paused");
+        showLCDMessage("Flip Blocked", "System Paused", 2000);
+      } else if (rainDetected) {
+        Serial.println("❌ Flip blocked - Rain detected");
+        showLCDMessage("Flip Blocked", "Rain Detected", 2000);
+      } else {
         showLCDMessage("Manual Flip", "FLIPPING NOW...", 2000);
         executeFlip();
         addLog("MANUAL_FLIP", "Triggered from dashboard");
-      } else {
-        Serial.println("❌ Flip blocked - conditions not met");
       }
     }
   }
   
-  // Check isPaused
+  if (Firebase.RTDB.getBool(&fbdo, "system/manualCover")) {
+    bool shouldToggle = fbdo.boolData();
+    if (shouldToggle) {
+      Serial.println(">>> MANUAL COVER TOGGLE! <<<");
+      Firebase.RTDB.setBool(&fbdo, "system/manualCover", false);
+      
+      if (coverClosed) {
+        openCover();
+        showLCDMessage("Cover Now", "COVER OPENED", 2000);
+        addLog("COVER_MANUAL", "Opened from dashboard");
+      } else {
+        closeCover();
+        showLCDMessage("Cover Now", "COVER CLOSED", 2000);
+        addLog("COVER_MANUAL", "Closed from dashboard");
+      }
+    }
+  }
+  
   if (Firebase.RTDB.getBool(&fbdo, "system/isPaused")) {
     bool newPaused = fbdo.boolData();
     if (newPaused != isPaused) {
@@ -363,6 +409,7 @@ void connectFirebase() {
   if (firebaseOK) {
     Serial.println("\n✓ Firebase Connected!");
     Firebase.RTDB.setBool(&fbdo, "system/manualFlip", false);
+    Firebase.RTDB.setBool(&fbdo, "system/manualCover", false);
     Firebase.RTDB.setString(&fbdo, "system/lcdMessage", "");
     publishSensorData();
     publishSystemState();
@@ -376,8 +423,21 @@ void connectFirebase() {
 void readSensors() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  if (!isnan(t) && t > 0 && t < 100) temperature = t;
-  if (!isnan(h) && h > 0 && h <= 100) humidity = h;
+  
+  if (!isnan(t) && t > -10 && t < 120) {
+    temperature = t;
+    lastGoodTemp = t;
+  } else if (lastGoodTemp > 0) {
+    temperature = lastGoodTemp;
+  }
+  
+  if (!isnan(h) && h >= 0 && h <= 100) {
+    humidity = h;
+    lastGoodHumidity = h;
+  } else if (lastGoodHumidity > 0) {
+    humidity = lastGoodHumidity;
+  }
+  
   sunlight = constrain(map(analogRead(LDR_PIN), 0, 4095, 0, 100), 0, 100);
   rainDetected = (digitalRead(RAIN_PIN) == HIGH);
 }
@@ -385,8 +445,8 @@ void readSensors() {
 void publishSensorData() {
   if (!firebaseOK) return;
   FirebaseJson json;
-  json.set("temperature", temperature);
-  json.set("humidity", humidity);
+  json.set("temperature", temperature > 0 ? temperature : 25.0);
+  json.set("humidity", humidity > 0 ? humidity : 50.0);
   json.set("sunlight", sunlight);
   json.set("rainDetected", rainDetected);
   json.set("timestamp", getTimestamp());
@@ -405,6 +465,7 @@ void publishSystemState() {
   String phase = "idle";
   if (!powerOn) phase = "offline";
   else if (isPaused) phase = "paused";
+  else if (coverClosed) phase = "cover_closed";
   else if (rainDetected) phase = "rain_protection";
   else if (remaining > 0) phase = "activeflipping";
   else phase = "flipping";
@@ -416,8 +477,7 @@ void publishSystemState() {
   json.set("dryingMode", dryingMode);
   json.set("flipMode", flipMode);
   json.set("powerOn", powerOn);
-  json.set("manualFlip", false);
-  json.set("lcdMessage", "");
+  json.set("coverClosed", coverClosed);
   json.set("lastUpdate", getTimestamp());
   
   Firebase.RTDB.setJSON(&fbdo, "system", &json);
@@ -445,7 +505,8 @@ void executeFlip() {
 }
 
 void handleAutoFlip() {
-  if (!powerOn || isPaused || rainDetected) return;
+  if (!powerOn || isPaused || rainDetected || coverClosed) return;
+  
   unsigned long interval = (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
   if (flipMode == "timer" && millis() - lastFlip >= interval) executeFlip();
   else if (flipMode == "environment" && sunlight > 60 && humidity < 75 && temperature > 26 && millis() - lastFlip >= 10000) {
@@ -457,19 +518,15 @@ void handleAutoFlip() {
 void handleRainProtection() {
   if (rainDetected && !lastRainState) {
     lastRainState = true;
-    if (coverServo.read() != 180) {
-      coverServo.write(180);
-      addAlert("Rain detected", "HIGH");
-      addLog("RAIN_PROTECTION", "Cover closed");
-      showLCDMessage("RAIN DETECTED!", "Cover Closed", 2000);
-    }
+    closeCover();
+    addAlert("Rain detected", "HIGH");
+    addLog("RAIN_PROTECTION", "Cover closed");
+    showLCDMessage("RAIN DETECTED!", "Cover Closed", 2000);
   } else if (!rainDetected && lastRainState) {
     lastRainState = false;
-    if (coverServo.read() != 0) {
-      coverServo.write(0);
-      addLog("RAIN_CLEARED", "Cover open");
-      showLCDMessage("Rain Cleared", "Cover Opened", 2000);
-    }
+    openCover();
+    addLog("RAIN_CLEARED", "Cover open");
+    showLCDMessage("Rain Cleared", "Cover Opened", 2000);
   }
 }
 
