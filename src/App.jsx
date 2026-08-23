@@ -291,9 +291,9 @@ function AppContent() {
 
 
   return (
-    <div className="min-h-screen bg-transparent">
-      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-24 bg-transparent">
-        <header className="sticky top-0 z-20 px-5 pt-6 pb-4 border-b bg-transparent border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
+    <div className="min-h-screen bg-[#E8EDF3] dark:bg-[#1A202C] transition-colors duration-500">
+      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-36 bg-[#E8EDF3] dark:bg-[#1A202C] transition-colors duration-500">
+        <header className="sticky top-0 z-20 px-5 pt-6 pb-4 border-b bg-[#E8EDF3] dark:bg-[#1A202C] border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight text-[#00386D] dark:text-[#F7FAFC]" style={{ fontFamily: 'Space Grotesk' }}>BUWAD</h1>
@@ -379,7 +379,7 @@ function AppContent() {
           </AnimatePresence>
         </div>
         <LayoutGroup>
-          <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl shadow-lg bg-white/90 dark:bg-[#1A202C]/90 border border-[#BDBCBD] dark:border-white/10">
+          <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl shadow-2xl bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 z-30">
             <div className="flex justify-around items-center p-2">
               {navItems.map((item) => (
                 <motion.button key={item.id} onClick={() => setActiveTab(item.id)} className="relative flex-1 py-3 flex flex-col items-center gap-1 rounded-xl" whileTap={{ scale: 0.95 }}>

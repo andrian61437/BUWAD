@@ -85,7 +85,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="rounded-2xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 transition-colors duration-500">
+        <div className="rounded-2xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] transition-colors duration-500">
           <div className="px-4 py-2">
             <div className="flex justify-between items-center">
               <span className="text-xs font-black tracking-wide text-[#00386D] dark:text-[#F7FAFC]">CONNECTING...</span>
@@ -94,7 +94,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
           </div>
         </div>
         <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('environmentalData')}</div>
-        <div className="rounded-2xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80">
+        <div className="rounded-2xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]">
           <div className="grid grid-cols-2">
             <div className="px-3 py-3 border-r border-b border-[#BDBCBD] dark:border-white/10"><div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('temperature')}</div><div className="h-7 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
             <div className="px-3 py-3 border-b border-[#BDBCBD] dark:border-white/10"><div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('humidity')}</div><div className="h-7 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
@@ -104,15 +104,15 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
             <div className="px-3 py-3"><div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('rainSensor')}</div><div className="h-6 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
           </div>
         </div>
-        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C]/80 border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('systemState')}</div><div className="h-5 w-28 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div></div>
-        <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C]/80 border border-[#BDBCBD] dark:border-white/10"><div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">NEXT AUTO FLIP IN</div><div className="h-8 w-24 mx-auto bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
-        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C]/80 border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div><div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">POWER</div><div className="h-4 w-8 mt-0.5 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div><div className="h-10 w-24 bg-gray-200 dark:bg-white/10 rounded-xl animate-pulse" /></div></div>
+        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('systemState')}</div><div className="h-5 w-28 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div></div>
+        <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">NEXT AUTO FLIP IN</div><div className="h-8 w-24 mx-auto bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
+        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div><div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">POWER</div><div className="h-4 w-8 mt-0.5 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div><div className="h-10 w-24 bg-gray-200 dark:bg-white/10 rounded-xl animate-pulse" /></div></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 pb-12">
       {/* Status Bar */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -122,7 +122,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
             ? 'border-red-500/50 bg-red-500/10 dark:bg-red-500/20'
             : displayData.rainDetected 
               ? 'border-[#6699CC]/50 bg-[#6699CC]/10 dark:bg-[#6699CC]/20' 
-              : 'border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80'
+              : 'border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]'
         }`}
       >
         <div className="px-4 py-2">
@@ -181,7 +181,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       </div>
       
       {/* 2x2 Grid */}
-      <div className="rounded-2xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 transition-colors duration-500">
+      <div className="rounded-2xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] transition-colors duration-500">
         <div className="grid grid-cols-2">
           <div className={`px-3 py-3 border-r border-b border-[#BDBCBD] dark:border-white/10 transition-colors duration-500 ${getPulseClass('temperature')}`}>
             <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('temperature')}</div>
@@ -211,7 +211,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       </div>
 
       {/* System State */}
-      <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C]/80 border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
+      <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="flex justify-between items-center">
           <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('systemState')}</div>
           <div className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC]" style={{ fontFamily: 'Space Grotesk' }}>
@@ -221,7 +221,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       </div>
 
       {/* NEXT FLIP */}
-      <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C]/80 border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
+      <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">
           {!systemOn ? 'SYSTEM STATUS' : (flipDisplay ? 'NEXT AUTO FLIP IN' : 'SYSTEM STATUS')}
         </div>
@@ -231,7 +231,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       </div>
 
       {/* POWER Button */}
-      <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C]/80 border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
+      <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="flex justify-between items-center">
           <div>
             <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">POWER</div>
@@ -247,7 +247,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       </div>
 
       {/* Quick Status Card */}
-      <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 px-4 py-3 transition-colors duration-500">
+      <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] px-4 py-3 transition-colors duration-500">
         <div className="grid grid-cols-4 gap-2 text-center">
           <div>
             <div className="text-[7px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">PROFILE</div>

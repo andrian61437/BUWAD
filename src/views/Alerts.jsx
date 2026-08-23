@@ -58,7 +58,7 @@ const Alerts = ({ alerts, rainDetected, dismissedIds, onDismiss, onDismissAll, t
   };
 
   return (
-    <div>
+    <div className="pb-12">
       <div className="flex justify-between items-baseline mb-3">
         <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] transition-colors duration-500">
           {t('criticalNotifications')}
@@ -91,7 +91,7 @@ const Alerts = ({ alerts, rainDetected, dismissedIds, onDismiss, onDismissAll, t
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.2 }}
-              className="rounded-xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 transition-colors duration-500"
+              className="rounded-xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] transition-colors duration-500"
             >
               <div className="p-4">
                 <div className="flex justify-between items-start mb-2">
@@ -135,7 +135,7 @@ const Alerts = ({ alerts, rainDetected, dismissedIds, onDismiss, onDismissAll, t
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="rounded-xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 p-8 text-center transition-colors duration-500"
+            className="rounded-xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] p-8 text-center transition-colors duration-500"
           >
             <div className="text-4xl font-black text-[#4A5568] dark:text-[#94A3B8] mb-3 transition-colors duration-500">—</div>
             <div className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC] transition-colors duration-500">{t('noActiveAlerts')}</div>

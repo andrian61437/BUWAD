@@ -83,7 +83,7 @@ const Logs = ({ activityLogs, t }) => {
   };
 
   return (
-    <div>
+    <div className="pb-12">
       <div className="mb-6">
         <div className="flex gap-2 mb-3">
           {filters.map((f) => (
@@ -94,7 +94,7 @@ const Logs = ({ activityLogs, t }) => {
               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold tracking-[0.1em] transition-colors duration-500 ${
                 filter === f.id
                   ? 'bg-[#00386D] dark:bg-[#6699CC] text-white'
-                  : 'bg-white dark:bg-[#1A202C]/80 border border-[#BDBCBD] dark:border-white/10 text-[#4A5568] dark:text-[#94A3B8]'
+                  : 'bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 text-[#4A5568] dark:text-[#94A3B8]'
               }`}
             >
               {f.label}
@@ -123,7 +123,7 @@ const Logs = ({ activityLogs, t }) => {
               transition={{ duration: 0.3, delay: Math.min(index * 0.02, 0.2) }}
               className={`rounded-xl border overflow-hidden transition-colors duration-500 ${
                 expandedLog === log.id ? 'border-[#6699CC] shadow-md' : 'border-[#BDBCBD] dark:border-white/10'
-              } bg-white dark:bg-[#1A202C]/80`}
+              } bg-white dark:bg-[#1A202C]`}
             >
               <motion.div
                 className="p-4 cursor-pointer"
@@ -196,7 +196,7 @@ const Logs = ({ activityLogs, t }) => {
         </AnimatePresence>
 
         {filteredLogs.length === 0 && (
-          <div className="rounded-xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 p-8 text-center transition-colors duration-500">
+          <div className="rounded-xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] p-8 text-center transition-colors duration-500">
             <div className="text-4xl font-black text-[#4A5568] dark:text-[#94A3B8] mb-3 transition-colors duration-500">—</div>
             <div className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC] transition-colors duration-500">{t('noActivityRecorded')}</div>
             <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mt-2 transition-colors duration-500">

@@ -77,54 +77,100 @@ const Controls = ({
   return (
     <>
       {toastPortal}
-      <div className="space-y-4">
+      <div className="space-y-4 pb-12">
         {/* Fish Profile Section */}
-        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 overflow-hidden transition-colors duration-500">
+        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
           <div className="px-5 pt-5 pb-3">
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('dryingParameters')}</div>
               <div className="flex items-center gap-1.5">
                 <motion.span className="w-1.5 h-1.5 rounded-full bg-[#6699CC]" animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
-                <span className="text-[9px] font-bold text-[#6699CC] tracking-wider">{isDanggit ? 'THICK FILLET' : 'SMALL MASS'}</span>
+                <span className="text-[9px] font-bold text-[#6699CC] tracking-wider">{isDanggit ? t('thickFillet') : t('smallMass')}</span>
               </div>
             </div>
           </div>
           <div className="px-3 pb-3">
-            <div className="relative flex bg-gray-100 dark:bg-white/5 rounded-xl p-1 min-h-[64px] overflow-hidden">
-              <motion.div layoutId="fishTypePill" className="absolute top-1 bottom-1 bg-[#00386D] dark:bg-[#6699CC] rounded-[10px] shadow-lg" style={{ width: 'calc(50% - 4px)', left: isDanggit ? '4px' : '50%' }} transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.8 }} />
-              <button type="button" onClick={() => handleDryingSelect('danggit')} className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-500 ${isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#94A3B8]'}`}>
+            <div className="relative flex bg-gray-100 dark:bg-[#121620] rounded-xl p-1 min-h-[64px] overflow-hidden">
+              <div
+                className="absolute top-1 bottom-1 bg-[#00386D] dark:bg-[#6699CC] rounded-[10px] shadow-lg transition-all duration-300 ease-out"
+                style={{
+                  width: 'calc(50% - 4px)',
+                  left: isDanggit ? '4px' : 'calc(50% + 0px)'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => handleDryingSelect('danggit')}
+                className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-300 ${
+                  isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
+                }`}
+              >
                 <span className="text-sm font-black tracking-wide leading-tight">{t('danggit')}</span>
-                <span className="text-[9px] font-medium mt-0.5 opacity-80">Rabbitfish</span>
+                <span className={`text-[9px] font-medium mt-0.5 ${isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  {t('rabbitfishThickFillet')}
+                </span>
               </button>
-              <button type="button" onClick={() => handleDryingSelect('bolinao')} className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-500 ${!isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#94A3B8]'}`}>
+              <button
+                type="button"
+                onClick={() => handleDryingSelect('bolinao')}
+                className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-300 ${
+                  !isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
+                }`}
+              >
                 <span className="text-sm font-black tracking-wide leading-tight">{t('bolinao')}</span>
-                <span className="text-[9px] font-medium mt-0.5 opacity-80">Anchovies</span>
+                <span className={`text-[9px] font-medium mt-0.5 ${!isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  {t('anchoviesSmallMass')}
+                </span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Flipping Mode Section */}
-        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 overflow-hidden transition-colors duration-500">
+        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
           <div className="px-5 pt-5 pb-3">
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('flippingMode')}</div>
               <div className="flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${isEnvironment ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <span className={`text-[9px] font-bold tracking-wider ${isEnvironment ? 'text-emerald-500' : 'text-amber-500'}`}>{isEnvironment ? 'SENSOR-DRIVEN' : 'FIXED INTERVAL'}</span>
+                <span className={`text-[9px] font-bold tracking-wider ${isEnvironment ? 'text-emerald-500' : 'text-amber-500'}`}>
+                  {isEnvironment ? t('sensorDrivenLabel') : t('fixedIntervalLabel')}
+                </span>
               </div>
             </div>
           </div>
           <div className="px-3 pb-5">
-            <div className="relative flex bg-gray-100 dark:bg-white/5 rounded-xl p-1 min-h-[64px] overflow-hidden">
-              <motion.div layoutId="flipModePill" className="absolute top-1 bottom-1 bg-[#00386D] dark:bg-[#6699CC] rounded-[10px] shadow-lg" style={{ width: 'calc(50% - 4px)', left: isEnvironment ? '4px' : '50%' }} transition={{ type: 'spring', stiffness: 380, damping: 28, mass: 0.8 }} />
-              <button type="button" onClick={() => handleFlipModeSelect('environment')} className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-2 rounded-[10px] transition-colors duration-500 ${isEnvironment ? 'text-white' : 'text-[#00386D] dark:text-[#94A3B8]'}`}>
+            <div className="relative flex bg-gray-100 dark:bg-[#121620] rounded-xl p-1 min-h-[64px] overflow-hidden">
+              <div
+                className="absolute top-1 bottom-1 bg-[#00386D] dark:bg-[#6699CC] rounded-[10px] shadow-lg transition-all duration-300 ease-out"
+                style={{
+                  width: 'calc(50% - 4px)',
+                  left: isEnvironment ? '4px' : 'calc(50% + 0px)'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => handleFlipModeSelect('environment')}
+                className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-2 rounded-[10px] transition-colors duration-300 ${
+                  isEnvironment ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
+                }`}
+              >
                 <span className="text-xs font-black tracking-wide leading-tight text-center">{t('environmentBased')}</span>
-                <span className="text-[8px] font-medium mt-0.5 opacity-80 text-center">Sensor-driven</span>
+                <span className={`text-[8px] font-medium mt-0.5 text-center ${isEnvironment ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  {t('sensorDriven')}
+                </span>
               </button>
-              <button type="button" onClick={() => handleFlipModeSelect('timer')} className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-2 rounded-[10px] transition-colors duration-500 ${!isEnvironment ? 'text-white' : 'text-[#00386D] dark:text-[#94A3B8]'}`}>
+              <button
+                type="button"
+                onClick={() => handleFlipModeSelect('timer')}
+                className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-2 rounded-[10px] transition-colors duration-300 ${
+                  !isEnvironment ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
+                }`}
+              >
                 <span className="text-xs font-black tracking-wide leading-tight text-center">{t('timerBased')}</span>
-                <span className="text-[8px] font-medium mt-0.5 opacity-80 text-center">Fixed cycle</span>
+                <span className={`text-[8px] font-medium mt-0.5 text-center ${!isEnvironment ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  {t('fixedInterval')}
+                </span>
               </button>
             </div>
           </div>
@@ -132,7 +178,7 @@ const Controls = ({
 
         {/* Manual Flip Section - Hidden when cover is closed */}
         {!isCoverClosed && (
-          <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 overflow-hidden transition-colors duration-500">
+          <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
             <div className="px-5 pt-5 pb-2">
               <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('flipMechanism')}</div>
             </div>
@@ -142,7 +188,7 @@ const Controls = ({
                 {isManualFliping && <motion.div className="absolute inset-0 bg-white/20" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ repeat: Infinity, duration: 0.8 }} />}
                 <span className="relative z-10 flex items-center justify-center gap-3">
                   {isManualFliping ? (
-                    <><svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg><span>EXECUTING...</span></>
+                    <><svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg><span>{t('executing')}</span></>
                   ) : (
                     <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg><span>{t('manualOverride')}</span></>
                   )}
@@ -154,14 +200,14 @@ const Controls = ({
 
         {/* Cover closed warning when Flip Now is hidden */}
         {isCoverClosed && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/5 dark:bg-red-500/10 px-4 py-3 text-center transition-colors duration-500">
-            <div className="text-[10px] font-black text-red-500 dark:text-red-400">FLIP DISABLED</div>
-            <div className="text-[8px] font-medium text-red-400/80 dark:text-red-400/60 mt-0.5">Cover is closed — open cover to enable flipping</div>
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 dark:bg-red-500/20 px-4 py-3 text-center transition-colors duration-500">
+            <div className="text-[10px] font-black text-red-600 dark:text-red-400">FLIP DISABLED</div>
+            <div className="text-[9px] font-medium text-red-600/80 dark:text-red-300 mt-0.5">{t('coverIsOn')} — Open cover to enable flipping</div>
           </div>
         )}
 
         {/* Cover Control Section */}
-        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]/80 overflow-hidden transition-colors duration-500">
+        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
           <div className="px-5 pt-5 pb-2">
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">COVER CONTROL</div>
