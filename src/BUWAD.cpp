@@ -1,10 +1,11 @@
-#include <WiFi.h>
-#include <Firebase_ESP_Client.h>
-#include <addons/TokenHelper.h>
+#include "secrets.h"
 #include <DHT.h>
 #include <ESP32Servo.h>
+#include <Firebase_ESP_Client.h>
 #include <LiquidCrystal_I2C.h>
-#include "secrets.h"
+#include <WiFi.h>
+#include <addons/TokenHelper.h>
+
 
 // ===== Pin Definitions =====
 #define DHTPIN 4
@@ -88,41 +89,45 @@ void openCover();
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  
+
   Serial.println("\n╔════════════════════════════════════╗");
   Serial.println("║     BUWAD Solar Fish Dryer       ║");
   Serial.println("╚════════════════════════════════════╝\n");
-  
+
   initLCD();
-  
+
   dht.begin();
   pinMode(RAIN_PIN, INPUT);
   pinMode(LDR_PIN, INPUT);
-  
+
   flipServo.attach(SERVO_FLIP);
   coverServo.attach(SERVO_COVER);
   flipServo.write(0);
   coverServo.write(0);
   coverClosed = false;
   Serial.println("✓ Servos initialized");
-  
+
   lcd.setCursor(0, 1);
   lcd.print("WiFi...");
   connectWiFi();
-  
+
   lcd.setCursor(0, 1);
   lcd.print("Firebase...");
   connectFirebase();
-  
+
   readSensors();
   lastRainState = rainDetected;
   lastFlip = millis();
-  
+
   showLCDMessage("BUWAD Ready!", "System Online", 2000);
-  
+
   Serial.println("\n✓ System Ready!");
-  Serial.print("  Danggit: "); Serial.print(FLIP_DANGGIT/1000); Serial.println("s");
-  Serial.print("  Bolinao: "); Serial.print(FLIP_BOLINAO/1000); Serial.println("s");
+  Serial.print("  Danggit: ");
+  Serial.print(FLIP_DANGGIT / 1000);
+  Serial.println("s");
+  Serial.print("  Bolinao: ");
+  Serial.print(FLIP_BOLINAO / 1000);
+  Serial.println("s");
   Serial.println("====================================\n");
 }
 
@@ -162,7 +167,7 @@ void openCover() {
 
 void updateLCD() {
   unsigned long now = millis();
-  
+
   if (lcdOverrideActive) {
     if (now >= lcdOverrideEnd) {
       lcdOverrideActive = false;
@@ -172,10 +177,11 @@ void updateLCD() {
       return;
     }
   }
-  
-  if (now - lastLCDUpdate < LCD_UPDATE_INTERVAL) return;
+
+  if (now - lastLCDUpdate < LCD_UPDATE_INTERVAL)
+    return;
   lastLCDUpdate = now;
-  
+
   if (!powerOn) {
     lcd.setCursor(0, 0);
     lcd.print("BUWAD OFFLINE");
@@ -183,97 +189,119 @@ void updateLCD() {
     lcd.print("                ");
     return;
   }
-  
+
   if (now - lastPageChange > 3000) {
     lcdPage = (lcdPage + 1) % 4;
     lastPageChange = now;
     lcd.clear();
   }
-  
-  switch(lcdPage) {
-    case 0:
-      lcd.setCursor(0, 0);
-      lcd.print("T:"); lcd.print(temperature, 1); lcd.print("C  H:"); lcd.print(humidity, 0); lcd.print("%");
-      lcd.setCursor(0, 1);
-      lcd.print("Sun:"); lcd.print(sunlight); lcd.print("%   NPM Rain:"); lcd.print(rainDetected ? "W" : "D");
-      break;
-    case 1:
-      lcd.setCursor(0, 0);
-      lcd.print("Mode:"); lcd.print(dryingMode == "danggit" ? "DANGGIT" : "BOLINAO");
-      lcd.setCursor(0, 1);
-      lcd.print("Flip:"); lcd.print(flipMode == "timer" ? "TIMER" : "ENV");
-      break;
-    case 2: {
-      lcd.setCursor(0, 0);
-      if (isPaused) lcd.print("PAUSED        ");
-      else if (rainDetected) lcd.print("RAIN MODE     ");
-      else if (coverClosed) lcd.print("COVER CLOSED  ");
-      else lcd.print("POWER: ON     ");
-      
-      lcd.setCursor(0, 1);
-      lcd.print("Next:");
-      unsigned long interval = (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
-      unsigned long remaining = 0;
-      if (millis() - lastFlip < interval) remaining = (interval - (millis() - lastFlip)) / 1000;
-      lcd.print(remaining); lcd.print("s    ");
-      break;
-    }
-    case 3:
-      lcd.setCursor(0, 0);
-      lcd.print(WiFi.status() == WL_CONNECTED ? "WiFi:CONNECTED" : "WiFi:OFFLINE");
-      lcd.setCursor(0, 1);
-      lcd.print(firebaseOK ? "FB:ONLINE    " : "FB:OFFLINE   ");
-      break;
+
+  switch (lcdPage) {
+  case 0:
+    lcd.setCursor(0, 0);
+    lcd.print("T:");
+    lcd.print(temperature, 1);
+    lcd.print("C  H:");
+    lcd.print(humidity, 0);
+    lcd.print("%");
+    lcd.setCursor(0, 1);
+    lcd.print("Sun:");
+    lcd.print(sunlight);
+    lcd.print("%   NPM Rain:");
+    lcd.print(rainDetected ? "W" : "D");
+    break;
+  case 1:
+    lcd.setCursor(0, 0);
+    lcd.print("Mode:");
+    lcd.print(dryingMode == "danggit" ? "DANGGIT" : "BOLINAO");
+    lcd.setCursor(0, 1);
+    lcd.print("Flip:");
+    lcd.print(flipMode == "timer" ? "TIMER" : "ENV");
+    break;
+  case 2: {
+    lcd.setCursor(0, 0);
+    if (isPaused)
+      lcd.print("PAUSED        ");
+    else if (rainDetected)
+      lcd.print("RAIN MODE     ");
+    else if (coverClosed)
+      lcd.print("COVER CLOSED  ");
+    else
+      lcd.print("POWER: ON     ");
+
+    lcd.setCursor(0, 1);
+    lcd.print("Next:");
+    unsigned long interval =
+        (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
+    unsigned long remaining = 0;
+    if (millis() - lastFlip < interval)
+      remaining = (interval - (millis() - lastFlip)) / 1000;
+    lcd.print(remaining);
+    lcd.print("s    ");
+    break;
+  }
+  case 3:
+    lcd.setCursor(0, 0);
+    lcd.print(WiFi.status() == WL_CONNECTED ? "WiFi:CONNECTED"
+                                            : "WiFi:OFFLINE");
+    lcd.setCursor(0, 1);
+    lcd.print(firebaseOK ? "FB:ONLINE    " : "FB:OFFLINE   ");
+    break;
   }
 }
 
 void loop() {
   unsigned long now = millis();
-  
+
   if (now - lastPublish > 30000 && firebaseOK) {
     Serial.println("⚠️ Watchdog: No publish for 30s - reconnecting Firebase...");
     firebaseOK = false;
     connectFirebase();
     lastPublish = millis();
   }
-  
+
   if (now - lastSensorRead >= SENSOR_INTERVAL) {
     readSensors();
     lastSensorRead = now;
   }
-  
+
   updateLCD();
-  
+
   if (now - lastSettingsCheck >= SETTINGS_CHECK_INTERVAL) {
     checkSettings();
     lastSettingsCheck = now;
   }
-  
+
   if (firebaseOK && (now - lastPublish >= PUBLISH_INTERVAL)) {
     publishSensorData();
     publishSystemState();
     lastPublish = now;
   }
-  
+
   handleRainProtection();
-  
-  if (powerOn) handleAutoFlip();
-  
+
+  if (powerOn)
+    handleAutoFlip();
+
   static unsigned long lastHeartbeat = 0;
   if (firebaseOK && (now - lastHeartbeat >= 30000)) {
     sendHeartbeat();
     lastHeartbeat = now;
   }
-  
+
   delay(10);
 }
 
 void checkSettings() {
-  if (!firebaseOK) return;
-  
-  if (Firebase.RTDB.getString(&fbdo, "system/lcdMessage")) {
-    String msg = fbdo.stringData();
-    if (msg.length() > 0) {
+  if (!firebaseOK)
+    return;
+
+  if (Firebase.RTDB.getJSON(&fbdo, "system")) {
+    FirebaseJson& json = fbdo.jsonObject();
+    FirebaseJsonData jsonData;
+
+    if (json.get(jsonData, "lcdMessage") && jsonData.success && jsonData.stringValue.length() > 0) {
+      String msg = jsonData.stringValue;
       int separator = msg.indexOf('|');
       String line1, line2;
       if (separator > 0) {
@@ -286,50 +314,56 @@ void checkSettings() {
       showLCDMessage(line1, line2, 2000);
       Firebase.RTDB.setString(&fbdo, "system/lcdMessage", "");
     }
-  }
-  
-  if (Firebase.RTDB.getBool(&fbdo, "system/powerOn")) {
-    bool newPower = fbdo.boolData();
-    if (newPower != powerOn) {
-      powerOn = newPower;
-      Serial.print("🔌 Power: "); Serial.println(powerOn ? "ON" : "OFF");
-      if (!powerOn) {
-        showLCDMessage("BUWAD OFFLINE", "", 0);
-        lcdOverrideActive = false;
-      } else {
-        showLCDMessage("POWER ON", "System Active", 2000);
+
+    if (json.get(jsonData, "powerOn") && jsonData.success) {
+      bool newPower = jsonData.boolValue;
+      if (newPower != powerOn) {
+        powerOn = newPower;
+        Serial.print("🔌 Power: ");
+        Serial.println(powerOn ? "ON" : "OFF");
+        if (!powerOn) {
+          showLCDMessage("BUWAD OFFLINE", "", 0);
+          lcdOverrideActive = false;
+        } else {
+          showLCDMessage("POWER ON", "System Active", 2000);
+        }
+        addLog("POWER_TOGGLE", powerOn ? "ON" : "OFF");
       }
-      addLog("POWER_TOGGLE", powerOn ? "ON" : "OFF");
     }
-  }
-  
-  if (Firebase.RTDB.getString(&fbdo, "system/dryingMode")) {
-    String newMode = fbdo.stringData();
-    if (newMode.length() > 0 && (newMode == "danggit" || newMode == "bolinao") && newMode != dryingMode) {
-      dryingMode = newMode;
-      lastFlip = millis();
-      Serial.print("📝 Drying mode: "); Serial.println(dryingMode);
-      showLCDMessage("Switching to", newMode == "danggit" ? "DANGGIT" : "BOLINAO", 2000);
-      addLog("DRYING_MODE", dryingMode);
+
+    if (json.get(jsonData, "dryingMode") && jsonData.success) {
+      String newMode = jsonData.stringValue;
+      if (newMode.length() > 0 &&
+          (newMode == "danggit" || newMode == "bolinao") &&
+          newMode != dryingMode) {
+        dryingMode = newMode;
+        lastFlip = millis();
+        Serial.print("📝 Drying mode: ");
+        Serial.println(dryingMode);
+        showLCDMessage("Switching to",
+                       newMode == "danggit" ? "DANGGIT" : "BOLINAO", 2000);
+        addLog("DRYING_MODE", dryingMode);
+      }
     }
-  }
-  
-  if (Firebase.RTDB.getString(&fbdo, "system/flipMode")) {
-    String newMode = fbdo.stringData();
-    if (newMode.length() > 0 && (newMode == "timer" || newMode == "environment") && newMode != flipMode) {
-      flipMode = newMode;
-      Serial.print("📝 Flip mode: "); Serial.println(flipMode);
-      showLCDMessage("Switching to", newMode == "timer" ? "TIMER-BASED" : "ENV-BASED", 2000);
-      addLog("FLIP_MODE", flipMode);
+
+    if (json.get(jsonData, "flipMode") && jsonData.success) {
+      String newMode = jsonData.stringValue;
+      if (newMode.length() > 0 &&
+          (newMode == "timer" || newMode == "environment") &&
+          newMode != flipMode) {
+        flipMode = newMode;
+        Serial.print("📝 Flip mode: ");
+        Serial.println(flipMode);
+        showLCDMessage("Switching to",
+                       newMode == "timer" ? "TIMER-BASED" : "ENV-BASED", 2000);
+        addLog("FLIP_MODE", flipMode);
+      }
     }
-  }
-  
-  if (Firebase.RTDB.getBool(&fbdo, "system/manualFlip")) {
-    bool shouldFlip = fbdo.boolData();
-    if (shouldFlip) {
+
+    if (json.get(jsonData, "manualFlip") && jsonData.success && jsonData.boolValue) {
       Serial.println(">>> MANUAL FLIP REQUESTED! <<<");
       Firebase.RTDB.setBool(&fbdo, "system/manualFlip", false);
-      
+
       if (coverClosed) {
         Serial.println("❌ Flip blocked - Cover is closed (safety)");
         showLCDMessage("Flip Blocked", "Cover is Closed", 2000);
@@ -349,14 +383,11 @@ void checkSettings() {
         addLog("MANUAL_FLIP", "Triggered from dashboard");
       }
     }
-  }
-  
-  if (Firebase.RTDB.getBool(&fbdo, "system/manualCover")) {
-    bool shouldToggle = fbdo.boolData();
-    if (shouldToggle) {
+
+    if (json.get(jsonData, "manualCover") && jsonData.success && jsonData.boolValue) {
       Serial.println(">>> MANUAL COVER TOGGLE! <<<");
       Firebase.RTDB.setBool(&fbdo, "system/manualCover", false);
-      
+
       if (coverClosed) {
         openCover();
         showLCDMessage("Cover Now", "COVER OPENED", 2000);
@@ -367,15 +398,16 @@ void checkSettings() {
         addLog("COVER_MANUAL", "Closed from dashboard");
       }
     }
-  }
-  
-  if (Firebase.RTDB.getBool(&fbdo, "system/isPaused")) {
-    bool newPaused = fbdo.boolData();
-    if (newPaused != isPaused) {
-      isPaused = newPaused;
-      Serial.print("⏸️ Paused: "); Serial.println(isPaused ? "YES" : "NO");
-      showLCDMessage(isPaused ? "PAUSED" : "RESUMED", "", 2000);
-      addLog(isPaused ? "PAUSED" : "RESUMED", "");
+
+    if (json.get(jsonData, "isPaused") && jsonData.success) {
+      bool newPaused = jsonData.boolValue;
+      if (newPaused != isPaused) {
+        isPaused = newPaused;
+        Serial.print("⏸️ Paused: ");
+        Serial.println(isPaused ? "YES" : "NO");
+        showLCDMessage(isPaused ? "PAUSED" : "RESUMED", "", 2000);
+        addLog(isPaused ? "PAUSED" : "RESUMED", "");
+      }
     }
   }
 }
@@ -384,11 +416,18 @@ void connectWiFi() {
   Serial.print("Connecting to WiFi");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) { delay(500); Serial.print("."); attempts++; }
+  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
   Serial.println();
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("✓ WiFi Connected!");
-    lcd.clear(); lcd.setCursor(0, 0); lcd.print("WiFi OK!"); delay(1500);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("WiFi OK!");
+    delay(1500);
   } else {
     Serial.println("✗ WiFi Failed!");
   }
@@ -403,9 +442,15 @@ void connectFirebase() {
   config.token_status_callback = tokenStatusCallback;
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
-  
-  for (int i = 0; i < 20; i++) { firebaseOK = Firebase.ready(); if (firebaseOK) break; delay(500); Serial.print("."); }
-  
+
+  for (int i = 0; i < 20; i++) {
+    firebaseOK = Firebase.ready();
+    if (firebaseOK)
+      break;
+    delay(500);
+    Serial.print(".");
+  }
+
   if (firebaseOK) {
     Serial.println("\n✓ Firebase Connected!");
     Firebase.RTDB.setBool(&fbdo, "system/manualFlip", false);
@@ -414,7 +459,10 @@ void connectFirebase() {
     publishSensorData();
     publishSystemState();
     addLog("SYSTEM_START", "ESP32 online");
-    lcd.clear(); lcd.setCursor(0, 0); lcd.print("Firebase OK!"); delay(1500);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Firebase OK!");
+    delay(1500);
   } else {
     Serial.println("\n✗ Firebase Failed!");
   }
@@ -423,27 +471,28 @@ void connectFirebase() {
 void readSensors() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
-  
+
   if (!isnan(t) && t > -10 && t < 120) {
     temperature = t;
     lastGoodTemp = t;
   } else if (lastGoodTemp > 0) {
     temperature = lastGoodTemp;
   }
-  
+
   if (!isnan(h) && h >= 0 && h <= 100) {
     humidity = h;
     lastGoodHumidity = h;
   } else if (lastGoodHumidity > 0) {
     humidity = lastGoodHumidity;
   }
-  
+
   sunlight = constrain(map(analogRead(LDR_PIN), 0, 4095, 0, 100), 0, 100);
   rainDetected = (digitalRead(RAIN_PIN) == HIGH);
 }
 
 void publishSensorData() {
-  if (!firebaseOK) return;
+  if (!firebaseOK)
+    return;
   FirebaseJson json;
   json.set("temperature", temperature > 0 ? temperature : 25.0);
   json.set("humidity", humidity > 0 ? humidity : 50.0);
@@ -454,22 +503,30 @@ void publishSensorData() {
 }
 
 void publishSystemState() {
-  if (!firebaseOK) return;
-  
-  unsigned long interval = (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
+  if (!firebaseOK)
+    return;
+
+  unsigned long interval =
+      (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
   unsigned long remaining = 0;
   if (millis() > lastFlip && (millis() - lastFlip) < interval) {
     remaining = (interval - (millis() - lastFlip)) / 1000;
   }
-  
+
   String phase = "idle";
-  if (!powerOn) phase = "offline";
-  else if (isPaused) phase = "paused";
-  else if (coverClosed) phase = "cover_closed";
-  else if (rainDetected) phase = "rain_protection";
-  else if (remaining > 0) phase = "activeflipping";
-  else phase = "flipping";
-  
+  if (!powerOn)
+    phase = "offline";
+  else if (isPaused)
+    phase = "paused";
+  else if (coverClosed)
+    phase = "cover_closed";
+  else if (rainDetected)
+    phase = "rain_protection";
+  else if (remaining > 0)
+    phase = "activeflipping";
+  else
+    phase = "flipping";
+
   FirebaseJson json;
   json.set("phase", phase);
   json.set("nextFlip", (int)remaining);
@@ -479,12 +536,13 @@ void publishSystemState() {
   json.set("powerOn", powerOn);
   json.set("coverClosed", coverClosed);
   json.set("lastUpdate", getTimestamp());
-  
-  Firebase.RTDB.setJSON(&fbdo, "system", &json);
+
+  Firebase.RTDB.updateNode(&fbdo, "system", &json);
 }
 
 void sendHeartbeat() {
-  if (!firebaseOK) return;
+  if (!firebaseOK)
+    return;
   FirebaseJson json;
   json.set("ip", WiFi.localIP().toString());
   json.set("rssi", WiFi.RSSI());
@@ -505,11 +563,15 @@ void executeFlip() {
 }
 
 void handleAutoFlip() {
-  if (!powerOn || isPaused || rainDetected || coverClosed) return;
-  
-  unsigned long interval = (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
-  if (flipMode == "timer" && millis() - lastFlip >= interval) executeFlip();
-  else if (flipMode == "environment" && sunlight > 60 && humidity < 75 && temperature > 26 && millis() - lastFlip >= 10000) {
+  if (!powerOn || isPaused || rainDetected || coverClosed)
+    return;
+
+  unsigned long interval =
+      (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
+  if (flipMode == "timer" && millis() - lastFlip >= interval)
+    executeFlip();
+  else if (flipMode == "environment" && sunlight > 60 && humidity < 75 &&
+           temperature > 26 && millis() - lastFlip >= 10000) {
     executeFlip();
     addLog("ENV_FLIP", "Sun:" + String(sunlight) + "%");
   }
@@ -531,7 +593,8 @@ void handleRainProtection() {
 }
 
 void addLog(String action, String details) {
-  if (!firebaseOK) return;
+  if (!firebaseOK)
+    return;
   FirebaseJson json;
   json.set("timestamp", getTimestamp());
   json.set("action", action);
@@ -540,7 +603,8 @@ void addLog(String action, String details) {
 }
 
 void addAlert(String message, String priority) {
-  if (!firebaseOK) return;
+  if (!firebaseOK)
+    return;
   FirebaseJson json;
   json.set("timestamp", getTimestamp());
   json.set("message", message);
@@ -552,6 +616,7 @@ void addAlert(String message, String priority) {
 String getTimestamp() {
   unsigned long seconds = millis() / 1000;
   char buffer[9];
-  sprintf(buffer, "%02d:%02d:%02d", (int)((seconds % 86400) / 3600), (int)((seconds % 3600) / 60), (int)(seconds % 60));
+  sprintf(buffer, "%02d:%02d:%02d", (int)((seconds % 86400) / 3600),
+          (int)((seconds % 3600) / 60), (int)(seconds % 60));
   return String(buffer);
 }

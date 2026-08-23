@@ -3,8 +3,6 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { getDatabase, ref, onValue, update, push, remove, query, orderByKey, limitToLast } from 'firebase/database';
 import { initializeApp } from 'firebase/app';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
-import WelcomeScreen from './views/WelcomeScreen';
-import LanguageSelector from './views/LanguageSelector';
 import Dashboard from './views/Dashboard';
 import Controls from './views/Controls';
 import Alerts from './views/Alerts';
@@ -35,7 +33,8 @@ const database = getDatabase(app);
 const MAX_LOCAL_LOGS = 200;
 
 function AppContent() {
-  const [stage, setStage] = useState('welcome');
+  const [stage, setStage] = useState('dashboard');
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const savedTheme = localStorage.getItem('buwad_theme');
@@ -49,7 +48,13 @@ function AppContent() {
   const [notificationMessage, setNotificationMessage] = useState(null);
   const [fcmToken, setFcmToken] = useState(null);
   const [messagingInstance, setMessagingInstance] = useState(null);
-  const { t, resetLanguage } = useLanguage();
+  const { t, language, selectLanguage, resetLanguage } = useLanguage();
+
+  const languages = [
+    { code: 'en', name: 'English', flag: 'US' },
+    { code: 'tl', name: 'Tagalog', flag: 'PH' },
+    { code: 'ceb', name: 'Cebuano', flag: 'PH' }
+  ];
   const [sensorData, setSensorData] = useState({
     temperature: 32.4, humidity: 65, sunlight: 78, rainDetected: false
   });
@@ -210,9 +215,7 @@ function AppContent() {
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (localStorage.getItem('buwad_save_language') === 'true') setStage('dashboard');
-  }, []);
+
 
   const toggleDarkMode = useCallback(() => {
     setIsDarkMode(prev => {
@@ -285,8 +288,7 @@ function AppContent() {
     { id: 'logs', label: t('logs'), icon: '☰' }
   ];
 
-  if (stage === 'welcome') return <WelcomeScreen onGetStarted={() => setStage('language')} toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} />;
-  if (stage === 'language') return <LanguageSelector toggleDarkMode={toggleDarkMode} isDarkMode={isDarkMode} onLanguageSelected={() => setStage('dashboard')} />;
+
 
   return (
     <div className="min-h-screen bg-transparent">
@@ -307,9 +309,42 @@ function AppContent() {
                   )}
                 </motion.button>
               )}
-              <motion.button onClick={() => { resetLanguage(); localStorage.removeItem('buwad_save_language'); localStorage.removeItem('buwad_language'); setStage('welcome'); }} whileTap={{ scale: 0.95 }} className="p-2 rounded-xl">
-                <svg className="w-5 h-5 text-[#00386D] dark:text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
-              </motion.button>
+              <div className="relative">
+                <motion.button onClick={() => setShowLangDropdown(!showLangDropdown)} whileTap={{ scale: 0.95 }} className="p-2 rounded-xl">
+                  <svg className="w-5 h-5 text-[#00386D] dark:text-[#94A3B8]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
+                </motion.button>
+                <AnimatePresence>
+                  {showLangDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      transition={{ duration: 0.15 }}
+                      className="absolute right-0 top-full mt-2 w-40 rounded-xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] shadow-xl z-50 overflow-hidden"
+                    >
+                      {languages.map((lang) => (
+                        <button
+                          key={lang.code}
+                          onClick={() => { selectLanguage(lang.code, true); setShowLangDropdown(false); }}
+                          className={`w-full px-4 py-2.5 text-left flex items-center gap-2.5 text-xs font-bold transition-colors ${
+                            language === lang.code
+                              ? 'bg-[#6699CC]/10 text-[#6699CC]'
+                              : 'text-[#00386D] dark:text-[#F7FAFC] hover:bg-gray-100 dark:hover:bg-white/5'
+                          }`}
+                        >
+                          <span className={`w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-black ${
+                            language === lang.code ? 'bg-[#6699CC] text-white' : 'bg-[#00386D]/5 dark:bg-[#6699CC]/10 text-[#00386D] dark:text-[#6699CC]'
+                          }`}>{lang.flag}</span>
+                          <span>{lang.name}</span>
+                          {language === lang.code && (
+                            <svg className="w-3.5 h-3.5 ml-auto text-[#6699CC]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                          )}
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <motion.button onClick={toggleDarkMode} whileTap={{ scale: 0.95 }} className="p-2 rounded-xl">
                 {isDarkMode ? (
                   <svg className="w-5 h-5 text-[#6699CC]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
