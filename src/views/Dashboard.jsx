@@ -11,6 +11,17 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
   const isDanggit = dryingMode === 'danggit';
   const isEnvironment = flipMode === 'environment';
 
+  // === Fallback & Reliability Status ===
+  const sensorFault = sensorData?.sensorFault || false;
+  const motorStalled = sensorData?.motorStalled || false;
+  const wifiOffline = systemState?.wifiOffline || false;
+
+  // Collect active fault warnings
+  const faultWarnings = [];
+  if (sensorFault) faultWarnings.push({ icon: '🌡️', label: 'SENSOR FAULT', detail: 'DHT sensor unreliable — fallback timer active (60s interval)', color: 'amber' });
+  if (motorStalled) faultWarnings.push({ icon: '⚙️', label: 'MOTOR JAM', detail: 'Flipping mechanism stalled — check hardware', color: 'red' });
+  if (wifiOffline) faultWarnings.push({ icon: '📡', label: 'WIFI OFFLINE', detail: 'Local mode active — auto-reconnecting', color: 'amber' });
+
   useEffect(() => {
     if (sensorData && typeof sensorData.temperature === 'number') {
       const timer = setTimeout(() => setIsLoading(false), 400);
@@ -60,6 +71,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
   const flipDisplay = getFlipDisplay();
 
   const getCycleDisplay = () => {
+    if (sensorFault) return '60s*';
     if (isEnvironment) return 'Adaptive';
     return isDanggit ? '15s' : '10s';
   };
@@ -127,6 +139,41 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
           </div>
         </div>
       </motion.div>
+
+      {/* === Fallback & Reliability Warning Banners === */}
+      {faultWarnings.length > 0 && (
+        <div className="space-y-2">
+          {faultWarnings.map((fault, idx) => (
+            <motion.div
+              key={fault.label}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: idx * 0.1 }}
+              className={`rounded-2xl px-4 py-2.5 border transition-colors duration-500 ${
+                fault.color === 'red'
+                  ? 'border-red-500/50 bg-red-500/10 dark:bg-red-500/15'
+                  : 'border-amber-500/50 bg-amber-500/10 dark:bg-amber-500/15'
+              }`}
+            >
+              <div className="flex items-start gap-2.5">
+                <span className="text-base mt-0.5">{fault.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className={`text-[10px] font-black tracking-[0.05em] ${
+                    fault.color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                  }`}>
+                    {fault.label}
+                  </div>
+                  <div className={`text-[9px] font-medium mt-0.5 ${
+                    fault.color === 'red' ? 'text-red-500/80 dark:text-red-400/70' : 'text-amber-500/80 dark:text-amber-400/70'
+                  }`}>
+                    {fault.detail}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
       {/* Environmental Data Label */}
       <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] transition-colors duration-500">

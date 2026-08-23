@@ -26,6 +26,13 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 #define FLIP_BOLINAO 10000
 #define LCD_UPDATE_INTERVAL 500
 
+// ===== Fallback & Reliability Thresholds =====
+#define SENSOR_FAULT_THRESHOLD 5      // consecutive NaN reads before fault
+#define FALLBACK_FLIP_INTERVAL 60000  // 60s fixed timer when sensor is faulty
+#define MOTOR_STALL_TIMEOUT 3000      // ms - max time to wait for servo move
+#define WIFI_RECONNECT_BASE_DELAY 5000 // ms - initial WiFi reconnect delay
+#define WIFI_RECONNECT_MAX_DELAY 120000 // ms - max backoff (2 minutes)
+
 // ===== Objects =====
 DHT dht(DHTPIN, DHTTYPE);
 Servo flipServo;
@@ -57,6 +64,18 @@ unsigned long lastSensorRead = 0;
 unsigned long lastLCDUpdate = 0;
 unsigned long lastSettingsCheck = 0;
 
+// ===== Fallback & Reliability State =====
+bool sensorFault = false;           // true when DHT sensor is unreliable
+int sensorNaNCount = 0;             // consecutive NaN reading counter
+bool motorStalled = false;          // true if last flip timed out
+bool wifiOffline = false;           // true when WiFi is disconnected
+unsigned long lastWiFiReconnect = 0; // last WiFi reconnect attempt time
+unsigned long wifiReconnectDelay = WIFI_RECONNECT_BASE_DELAY; // current backoff delay
+
+// Note: Power is supplied via USB power bank (solar → power bank → ESP32).
+// The power bank provides a steady 5V output, so battery voltage monitoring
+// is not applicable. The ESP32 will simply lose power when the bank is depleted.
+
 // LCD message override
 bool lcdOverrideActive = false;
 unsigned long lcdOverrideEnd = 0;
@@ -84,6 +103,7 @@ void updateLCD();
 void showLCDMessage(String line1, String line2, unsigned long durationMs);
 void closeCover();
 void openCover();
+void handleWiFiReconnect();
 
 // ===== SETUP =====
 void setup() {
@@ -191,7 +211,7 @@ void updateLCD() {
   }
 
   if (now - lastPageChange > 3000) {
-    lcdPage = (lcdPage + 1) % 4;
+    lcdPage = (lcdPage + 1) % 5;
     lastPageChange = now;
     lcd.clear();
   }
@@ -247,11 +267,29 @@ void updateLCD() {
     lcd.setCursor(0, 1);
     lcd.print(firebaseOK ? "FB:ONLINE    " : "FB:OFFLINE   ");
     break;
+  case 4: {
+    // Fallback & Health Status Page
+    lcd.setCursor(0, 0);
+    if (sensorFault)
+      lcd.print("SENSOR FAULT!   ");
+    else if (motorStalled)
+      lcd.print("MOTOR JAM!      ");
+    else
+      lcd.print("Health: OK      ");
+
+    lcd.setCursor(0, 1);
+    lcd.print("PWR:USB ");
+    lcd.print(sensorFault ? "TMR" : "NRM");
+    break;
+  }
   }
 }
 
 void loop() {
   unsigned long now = millis();
+
+  // --- WiFi Auto-Reconnect with Exponential Backoff ---
+  handleWiFiReconnect();
 
   if (now - lastPublish > 30000 && firebaseOK) {
     Serial.println("⚠️ Watchdog: No publish for 30s - reconnecting Firebase...");
@@ -456,6 +494,7 @@ void connectFirebase() {
     Firebase.RTDB.setBool(&fbdo, "system/manualFlip", false);
     Firebase.RTDB.setBool(&fbdo, "system/manualCover", false);
     Firebase.RTDB.setString(&fbdo, "system/lcdMessage", "");
+    checkSettings();
     publishSensorData();
     publishSystemState();
     addLog("SYSTEM_START", "ESP32 online");
@@ -472,22 +511,95 @@ void readSensors() {
   float t = dht.readTemperature();
   float h = dht.readHumidity();
 
-  if (!isnan(t) && t > -10 && t < 120) {
-    temperature = t;
-    lastGoodTemp = t;
-  } else if (lastGoodTemp > 0) {
-    temperature = lastGoodTemp;
-  }
+  bool tempValid = !isnan(t) && t > 0 && t < 70;
+  bool humValid = !isnan(h) && h >= 5 && h <= 99;
 
-  if (!isnan(h) && h >= 0 && h <= 100) {
+  if (tempValid && humValid) {
+    temperature = t;
     humidity = h;
+    lastGoodTemp = t;
     lastGoodHumidity = h;
-  } else if (lastGoodHumidity > 0) {
+    sensorNaNCount = 0;
+
+    // Clear sensor fault if readings are good again
+    if (sensorFault) {
+      sensorFault = false;
+      Serial.println("✓ Sensor recovered - resuming normal mode");
+      showLCDMessage("Sensor OK!", "Normal Mode", 2000);
+      addLog("SENSOR_RECOVERED", "DHT readings normal");
+      addAlert("Sensor recovered - normal operation resumed", "LOW");
+    }
+  } else {
+    // Use last known good values
+    temperature = lastGoodTemp;
     humidity = lastGoodHumidity;
+    sensorNaNCount++;
+
+    // Trigger sensor fault after threshold consecutive failures
+    if (sensorNaNCount >= SENSOR_FAULT_THRESHOLD && !sensorFault) {
+      sensorFault = true;
+      Serial.println("⚠️ SENSOR FAULT: DHT failed " + String(SENSOR_FAULT_THRESHOLD) + " consecutive reads");
+      Serial.println("   Fallback: Switching to fixed " + String(FALLBACK_FLIP_INTERVAL / 1000) + "s timer mode");
+      showLCDMessage("SENSOR FAULT!", "TIMER MODE ON", 3000);
+      addLog("SENSOR_FAULT", "DHT failed - fallback to " + String(FALLBACK_FLIP_INTERVAL / 1000) + "s timer");
+      addAlert("Sensor fault detected - system running on fallback timer mode", "HIGH");
+    }
   }
 
   sunlight = constrain(map(analogRead(LDR_PIN), 0, 4095, 0, 100), 0, 100);
   rainDetected = (digitalRead(RAIN_PIN) == HIGH);
+}
+
+
+void handleWiFiReconnect() {
+  bool currentlyConnected = (WiFi.status() == WL_CONNECTED);
+
+  if (currentlyConnected) {
+    if (wifiOffline) {
+      // Just reconnected
+      wifiOffline = false;
+      wifiReconnectDelay = WIFI_RECONNECT_BASE_DELAY; // reset backoff
+      Serial.println("✓ WiFi reconnected!");
+      showLCDMessage("WiFi Back!", "Reconnected", 2000);
+      addLog("WIFI_RECONNECTED", "Signal: " + String(WiFi.RSSI()) + "dBm");
+
+      // Re-establish Firebase
+      if (!firebaseOK) {
+        connectFirebase();
+      }
+    }
+    return;
+  }
+
+  // WiFi is disconnected
+  if (!wifiOffline) {
+    wifiOffline = true;
+    Serial.println("⚠️ WiFi disconnected - local mode active");
+    showLCDMessage("WiFi LOST!", "Local Mode", 2000);
+    addLog("WIFI_LOST", "Switching to local mode");
+  }
+
+  // Attempt reconnect with exponential backoff
+  unsigned long now = millis();
+  if (now - lastWiFiReconnect >= wifiReconnectDelay) {
+    lastWiFiReconnect = now;
+    Serial.println("📡 WiFi reconnect attempt (backoff: " + String(wifiReconnectDelay / 1000) + "s)...");
+    WiFi.disconnect();
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+
+    // Brief blocking wait (max 5s)
+    int attempts = 0;
+    while (WiFi.status() != WL_CONNECTED && attempts < 10) {
+      delay(500);
+      attempts++;
+    }
+
+    if (WiFi.status() != WL_CONNECTED) {
+      // Increase backoff (exponential, capped)
+      wifiReconnectDelay = min(wifiReconnectDelay * 2, (unsigned long)WIFI_RECONNECT_MAX_DELAY);
+      Serial.println("   WiFi still offline. Next attempt in " + String(wifiReconnectDelay / 1000) + "s");
+    }
+  }
 }
 
 void publishSensorData() {
@@ -498,6 +610,8 @@ void publishSensorData() {
   json.set("humidity", humidity > 0 ? humidity : 50.0);
   json.set("sunlight", sunlight);
   json.set("rainDetected", rainDetected);
+  json.set("sensorFault", sensorFault);
+  json.set("motorStalled", motorStalled);
   json.set("timestamp", getTimestamp());
   Firebase.RTDB.setJSON(&fbdo, "sensors", &json);
 }
@@ -531,10 +645,10 @@ void publishSystemState() {
   json.set("phase", phase);
   json.set("nextFlip", (int)remaining);
   json.set("isPaused", isPaused);
-  json.set("dryingMode", dryingMode);
-  json.set("flipMode", flipMode);
-  json.set("powerOn", powerOn);
   json.set("coverClosed", coverClosed);
+  json.set("sensorFault", sensorFault);
+  json.set("motorStalled", motorStalled);
+  json.set("wifiOffline", wifiOffline);
   json.set("lastUpdate", getTimestamp());
 
   Firebase.RTDB.updateNode(&fbdo, "system", &json);
@@ -555,16 +669,54 @@ void sendHeartbeat() {
 void executeFlip() {
   Serial.println("🔄 FLIPPING!");
   flipState = !flipState;
-  flipServo.write(flipState ? 180 : 0);
-  delay(800);
+  int targetAngle = flipState ? 180 : 0;
+
+  // Motor stall protection: write command and monitor with timeout
+  unsigned long flipStart = millis();
+  flipServo.write(targetAngle);
+
+  // Wait for servo to complete movement (typical ~600-800ms for 180°)
+  // but cap at MOTOR_STALL_TIMEOUT to prevent overheating if jammed
+  delay(min((unsigned long)800, (unsigned long)MOTOR_STALL_TIMEOUT));
+
+  unsigned long flipDuration = millis() - flipStart;
+
+  if (flipDuration >= MOTOR_STALL_TIMEOUT) {
+    // Potential stall detected
+    if (!motorStalled) {
+      motorStalled = true;
+      Serial.println("⚠️ MOTOR STALL: Flip exceeded " + String(MOTOR_STALL_TIMEOUT) + "ms timeout");
+      showLCDMessage("ERR: MOTOR JAM", "Check mechanism", 3000);
+      addLog("MOTOR_STALL", "Flip timeout at " + String(targetAngle) + "°");
+      addAlert("Motor stall detected - check flipping mechanism", "HIGH");
+    }
+  } else {
+    // Flip succeeded - clear stall flag if it was set
+    if (motorStalled) {
+      motorStalled = false;
+      Serial.println("✓ Motor recovered - flip successful");
+      addLog("MOTOR_RECOVERED", "Flip OK at " + String(targetAngle) + "°");
+    }
+  }
+
   lastFlip = millis();
-  addLog("FLIP_EXECUTED", "Position: " + String(flipState ? 180 : 0) + "°");
+  addLog("FLIP_EXECUTED", "Position: " + String(targetAngle) + "°");
   publishSystemState();
 }
 
 void handleAutoFlip() {
   if (!powerOn || isPaused || rainDetected || coverClosed)
     return;
+
+  // If sensor is faulty, override to fixed fallback timer regardless of flipMode
+  if (sensorFault) {
+    if (millis() - lastFlip >= FALLBACK_FLIP_INTERVAL) {
+      Serial.println("⏱️ Fallback timer flip (sensor fault active)");
+      executeFlip();
+      addLog("FALLBACK_FLIP", "Sensor fault - fixed " + String(FALLBACK_FLIP_INTERVAL / 1000) + "s interval");
+    }
+    return;
+  }
 
   unsigned long interval =
       (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
