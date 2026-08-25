@@ -10,6 +10,7 @@ const Controls = ({
   onFlipModeToggle, 
   onManualOverride,
   onCoverToggle,
+  isDeviceOnline,
   t 
 }) => {
   const [isManualFliping, setIsManualFliping] = useState(false);
@@ -17,6 +18,7 @@ const Controls = ({
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const toastTimeoutRef = useRef(null);
+  const isOnline = isDeviceOnline !== undefined ? isDeviceOnline : true;
 
   const currentDryingMode = dryingMode || 'danggit';
   const currentFlipMode = flipMode || 'timer';
@@ -34,28 +36,44 @@ const Controls = ({
   }, []);
 
   const handleDryingSelect = useCallback((mode) => {
+    if (!isOnline) {
+      triggerToast('Cannot change profile — ESP32 is offline');
+      return;
+    }
     if (mode === currentDryingMode) return;
     onDryingModeToggle?.(mode);
     triggerToast(`Switched to ${mode === 'danggit' ? 'Danggit' : 'Bolinao'}`);
-  }, [currentDryingMode, onDryingModeToggle, triggerToast]);
+  }, [currentDryingMode, onDryingModeToggle, triggerToast, isOnline]);
 
   const handleFlipModeSelect = useCallback((mode) => {
+    if (!isOnline) {
+      triggerToast('Cannot change mode — ESP32 is offline');
+      return;
+    }
     if (mode === currentFlipMode) return;
     onFlipModeToggle?.(mode);
     triggerToast(`Switched to ${mode === 'environment' ? 'Environment-Based' : 'Timer-Based'} flipping`);
-  }, [currentFlipMode, onFlipModeToggle, triggerToast]);
+  }, [currentFlipMode, onFlipModeToggle, triggerToast, isOnline]);
 
   const handleManualFlip = useCallback(() => {
+    if (!isOnline) {
+      triggerToast('ESP32 is offline');
+      return;
+    }
     setIsManualFliping(true);
     onManualOverride?.();
     setTimeout(() => { setIsManualFliping(false); triggerToast('Fish flipped successfully'); }, 800);
-  }, [onManualOverride, triggerToast]);
+  }, [onManualOverride, triggerToast, isOnline]);
 
   const handleCoverToggle = useCallback(() => {
+    if (!isOnline) {
+      triggerToast('ESP32 is offline');
+      return;
+    }
     setIsManualCover(true);
     onCoverToggle?.();
     setTimeout(() => { setIsManualCover(false); triggerToast(isCoverClosed ? 'Cover opened' : 'Cover closed'); }, 800);
-  }, [isCoverClosed, onCoverToggle, triggerToast]);
+  }, [isCoverClosed, onCoverToggle, triggerToast, isOnline]);
 
   const isDanggit = currentDryingMode === 'danggit';
   const isEnvironment = currentFlipMode === 'environment';
@@ -77,7 +95,13 @@ const Controls = ({
   return (
     <>
       {toastPortal}
-      <div className="space-y-4 pb-12">
+      <div className="space-y-4">
+        {!isOnline && (
+          <div className="rounded-2xl border border-red-500/50 bg-red-500/10 dark:bg-red-500/20 px-4 py-3 text-center transition-colors duration-500">
+            <div className="text-[10px] font-black text-red-600 dark:text-red-400">ESP32 OFFLINE</div>
+            <div className="text-[9px] font-medium text-red-600/80 dark:text-red-300 mt-0.5">Controls disabled — Device disconnected</div>
+          </div>
+        )}
         {/* Fish Profile Section */}
         <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
           <div className="px-5 pt-5 pb-3">

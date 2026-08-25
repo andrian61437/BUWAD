@@ -43,6 +43,8 @@ function AppContent() {
   });
   const [isSystemPoweredOn, setIsSystemPoweredOn] = useState(true);
   const [hasRealData, setHasRealData] = useState(false);
+  const [isDeviceOnline, setIsDeviceOnline] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('checking'); // 'checking' | 'online' | 'offline'
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notificationsSupported, setNotificationsSupported] = useState(false);
   const [notificationMessage, setNotificationMessage] = useState(null);
@@ -55,11 +57,9 @@ function AppContent() {
     { code: 'tl', name: 'Tagalog', flag: 'PH' },
     { code: 'ceb', name: 'Cebuano', flag: 'PH' }
   ];
-  const [sensorData, setSensorData] = useState({
-    temperature: 32.4, humidity: 65, sunlight: 78, rainDetected: false
-  });
+  const [sensorData, setSensorData] = useState(null);
   const [systemState, setSystemState] = useState({
-    phase: 'activeflipping', nextFlip: 0, isPaused: false,
+    phase: 'offline', nextFlip: 0, isPaused: false,
     manualOverride: false, dryingMode: 'danggit', flipMode: 'timer',
     coverClosed: false
   });
@@ -68,6 +68,9 @@ function AppContent() {
   const [toast, setToast] = useState(null);
   const [dismissedAlertIds, setDismissedAlertIds] = useState([]);
   
+  const lastPingRef = useRef(null);
+  const lastPingTimeRef = useRef(0);
+  const firstSeenTimeRef = useRef(0);
   const localLogIdsRef = useRef(new Set());
   const foregroundUnsubscribeRef = useRef(null);
   const triggersCleanupRef = useRef(null);
@@ -86,7 +89,24 @@ function AppContent() {
     return `${hours % 12 || 12}:${minutes} ${ampm}`;
   }, []);
 
-  const isHeaderActive = isSystemPoweredOn && hasRealData;
+  const isHeaderActive = connectionStatus === 'online' && isSystemPoweredOn;
+
+  useEffect(() => {
+    const watchdog = setInterval(() => {
+      const now = Date.now();
+      // On startup: if after 5 seconds the initial ping never changes, mark offline
+      if (connectionStatus === 'checking' && firstSeenTimeRef.current > 0 && now - firstSeenTimeRef.current > 5000) {
+        setConnectionStatus('offline');
+        setIsDeviceOnline(false);
+      }
+      // While online: allow up to 10 seconds of WiFi/SSL latency before marking offline
+      if (isDeviceOnline && lastPingTimeRef.current > 0 && now - lastPingTimeRef.current > 10000) {
+        setIsDeviceOnline(false);
+        setConnectionStatus('offline');
+      }
+    }, 1000);
+    return () => clearInterval(watchdog);
+  }, [connectionStatus, isDeviceOnline]);
 
   const writeToSystem = useCallback(async (updates) => {
     if (!database) return;
@@ -230,14 +250,33 @@ function AppContent() {
     if (!database) return;
     const unsubSensors = onValue(ref(database, 'sensors'), (snapshot) => {
       const data = snapshot.val();
-      if (data) {
+      if (!data) return;
+
+      const currentPing = data.ping !== undefined ? data.ping : data.timestamp;
+
+      if (lastPingRef.current === null) {
+        lastPingRef.current = currentPing;
+        firstSeenTimeRef.current = Date.now();
+        return;
+      }
+
+      if (currentPing !== lastPingRef.current) {
+        lastPingRef.current = currentPing;
+        lastPingTimeRef.current = Date.now();
+        setIsDeviceOnline(true);
+        setConnectionStatus('online');
         setSensorData({ 
-          temperature: data.temperature || 25.0, 
-          humidity: data.humidity || 50, 
-          sunlight: data.sunlight || 50, 
-          rainDetected: data.rainDetected || false 
+          temperature: typeof data.temperature === 'number' ? data.temperature : null, 
+          humidity: typeof data.humidity === 'number' ? data.humidity : null, 
+          sunlight: typeof data.sunlight === 'number' ? data.sunlight : null, 
+          rainDetected: data.rainDetected || false,
+          sensorFault: data.sensorFault || false,
+          motorStalled: data.motorStalled || false
         });
-        setHasRealData(data.sunlight > 0 || data.humidity > 0 || data.temperature > 0);
+        setHasRealData(true);
+      } else if (isDeviceOnline) {
+        // Even if ping value was the same momentarily, mark live reception
+        lastPingTimeRef.current = Date.now();
       }
     });
     const unsubSystem = onValue(ref(database, 'system'), (snapshot) => {
@@ -279,7 +318,10 @@ function AppContent() {
     return () => { unsubSensors(); unsubSystem(); unsubAlerts(); unsubLogs(); };
   }, [formatToStandardTime]);
 
-  const getSunlightLabel = () => sensorData.sunlight > 70 ? 'INTENSE' : sensorData.sunlight > 40 ? 'MODERATE' : 'LOW';
+  const getSunlightLabel = () => {
+    if (!sensorData || typeof sensorData.sunlight !== 'number') return '--';
+    return sensorData.sunlight > 70 ? 'INTENSE' : sensorData.sunlight > 40 ? 'MODERATE' : 'LOW';
+  };
   const formatCountdown = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
   const navItems = [
     { id: 'dashboard', label: t('dashboard'), icon: '▦' },
@@ -292,12 +334,17 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-[#E8EDF3] dark:bg-[#1A202C] transition-colors duration-500">
-      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-36 bg-[#E8EDF3] dark:bg-[#1A202C] transition-colors duration-500">
+      <div className="max-w-md mx-auto min-h-screen flex flex-col pb-20 bg-[#E8EDF3] dark:bg-[#1A202C] transition-colors duration-500">
         <header className="sticky top-0 z-20 px-5 pt-6 pb-4 border-b bg-[#E8EDF3] dark:bg-[#1A202C] border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
           <div className="flex justify-between items-center">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-black tracking-tight text-[#00386D] dark:text-[#F7FAFC]" style={{ fontFamily: 'Space Grotesk' }}>BUWAD</h1>
-              <motion.div animate={{ scale: [1, 1.2, 1] }} transition={{ repeat: Infinity, duration: 2 }} className={`w-2 h-2 rounded-full ${isHeaderActive ? 'bg-green-500' : 'bg-red-500'}`} />
+              <div 
+                className={`w-2.5 h-2.5 rounded-full transition-colors duration-300 ${
+                  connectionStatus === 'online' && isSystemPoweredOn ? 'bg-green-500 shadow-sm shadow-green-500/50' :
+                  connectionStatus === 'checking' ? 'bg-amber-500 animate-pulse' : 'bg-red-500 shadow-sm shadow-red-500/50'
+                }`} 
+              />
             </div>
             <div className="flex items-center gap-1.5">
               {notificationsSupported && (
@@ -363,17 +410,44 @@ function AppContent() {
           )}
         </AnimatePresence>
         <div className="flex-1 px-5 py-6">
-          {!hasRealData && (
-            <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 px-4 py-2 mb-4">
-              <div className="text-[11px] font-black text-amber-600">DEMO MODE</div>
-              <div className="text-[9px] text-amber-600/70">No sensor data · Sample values</div>
-            </div>
-          )}
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.2 }}>
-              {activeTab === 'dashboard' && <Dashboard sensorData={sensorData} systemState={systemState} sunlightLabel={getSunlightLabel()} formatCountdown={formatCountdown} t={t} onSystemToggle={handleSystemPowerToggle} isSystemOn={isSystemPoweredOn} />}
-              {activeTab === 'controls' && <Controls dryingMode={systemState.dryingMode} flipMode={systemState.flipMode} coverClosed={systemState.coverClosed} onDryingModeToggle={handleDryingModeToggle} onFlipModeToggle={handleFlipModeToggle} onManualOverride={handleManualOverride} onCoverToggle={handleCoverToggle} t={t} />}
-              {activeTab === 'alerts' && <Alerts alerts={alerts} rainDetected={sensorData.rainDetected} dismissedIds={dismissedAlertIds} onDismiss={handleDismissAlert} onDismissAll={handleDismissAllAlerts} t={t} />}
+              {activeTab === 'dashboard' && (
+                <Dashboard 
+                  sensorData={sensorData} 
+                  systemState={systemState} 
+                  sunlightLabel={getSunlightLabel()} 
+                  formatCountdown={formatCountdown} 
+                  t={t} 
+                  onSystemToggle={handleSystemPowerToggle} 
+                  isSystemOn={isSystemPoweredOn}
+                  isDeviceOnline={isDeviceOnline}
+                  connectionStatus={connectionStatus}
+                />
+              )}
+              {activeTab === 'controls' && (
+                <Controls 
+                  dryingMode={systemState.dryingMode} 
+                  flipMode={systemState.flipMode} 
+                  coverClosed={systemState.coverClosed} 
+                  onDryingModeToggle={handleDryingModeToggle} 
+                  onFlipModeToggle={handleFlipModeToggle} 
+                  onManualOverride={handleManualOverride} 
+                  onCoverToggle={handleCoverToggle} 
+                  isDeviceOnline={isDeviceOnline}
+                  t={t} 
+                />
+              )}
+              {activeTab === 'alerts' && (
+                <Alerts 
+                  alerts={alerts} 
+                  rainDetected={isDeviceOnline && sensorData?.rainDetected} 
+                  dismissedIds={dismissedAlertIds} 
+                  onDismiss={handleDismissAlert} 
+                  onDismissAll={handleDismissAllAlerts} 
+                  t={t} 
+                />
+              )}
               {activeTab === 'logs' && <Logs activityLogs={activityLogs} t={t} />}
             </motion.div>
           </AnimatePresence>

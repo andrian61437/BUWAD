@@ -613,6 +613,7 @@ void publishSensorData() {
   json.set("sensorFault", sensorFault);
   json.set("motorStalled", motorStalled);
   json.set("timestamp", getTimestamp());
+  json.set("ping", (int)(millis() / 1000));
   Firebase.RTDB.setJSON(&fbdo, "sensors", &json);
 }
 

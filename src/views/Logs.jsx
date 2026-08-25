@@ -83,7 +83,7 @@ const Logs = ({ activityLogs, t }) => {
   };
 
   return (
-    <div className="pb-12">
+    <div>
       <div className="mb-6">
         <div className="flex gap-2 mb-3">
           {filters.map((f) => (
@@ -111,7 +111,7 @@ const Logs = ({ activityLogs, t }) => {
         </div>
       </div>
 
-      <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+      <div className="space-y-2">
         <AnimatePresence>
           {filteredLogs.map((log, index) => (
             <motion.div

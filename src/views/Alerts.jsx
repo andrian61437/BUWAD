@@ -58,7 +58,7 @@ const Alerts = ({ alerts, rainDetected, dismissedIds, onDismiss, onDismissAll, t
   };
 
   return (
-    <div className="pb-12">
+    <div>
       <div className="flex justify-between items-baseline mb-3">
         <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] transition-colors duration-500">
           {t('criticalNotifications')}
@@ -82,7 +82,7 @@ const Alerts = ({ alerts, rainDetected, dismissedIds, onDismiss, onDismissAll, t
         </div>
       </div>
       
-      <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+      <div className="space-y-3">
         <AnimatePresence>
           {criticalAlerts.map((alert) => (
             <motion.div
