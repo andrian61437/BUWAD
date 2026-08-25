@@ -54,6 +54,7 @@ float lastGoodHumidity = 50.0;
 
 String dryingMode = "danggit";
 String flipMode = "timer";
+int customTimerInterval = 0; // In seconds (0 = use dryingMode preset)
 bool powerOn = true;
 bool isPaused = false;
 bool flipState = false;
@@ -251,8 +252,9 @@ void updateLCD() {
 
     lcd.setCursor(0, 1);
     lcd.print("Next:");
-    unsigned long interval =
-        (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
+    unsigned long interval = customTimerInterval > 0
+                                 ? (customTimerInterval * 1000UL)
+                                 : ((dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO);
     unsigned long remaining = 0;
     if (millis() - lastFlip < interval)
       remaining = (interval - (millis() - lastFlip)) / 1000;
@@ -395,6 +397,17 @@ void checkSettings() {
         showLCDMessage("Switching to",
                        newMode == "timer" ? "TIMER-BASED" : "ENV-BASED", 2000);
         addLog("FLIP_MODE", flipMode);
+      }
+    }
+
+    if (json.get(jsonData, "timerInterval") && jsonData.success) {
+      int newInterval = jsonData.intValue;
+      if (newInterval >= 5 && newInterval <= 3600 && newInterval != customTimerInterval) {
+        customTimerInterval = newInterval;
+        Serial.print("⏱️ Custom timer interval: ");
+        Serial.print(customTimerInterval);
+        Serial.println("s");
+        addLog("TIMER_INTERVAL", String(customTimerInterval) + "s");
       }
     }
 
@@ -621,8 +634,9 @@ void publishSystemState() {
   if (!firebaseOK)
     return;
 
-  unsigned long interval =
-      (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
+  unsigned long interval = customTimerInterval > 0
+                               ? (customTimerInterval * 1000UL)
+                               : ((dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO);
   unsigned long remaining = 0;
   if (millis() > lastFlip && (millis() - lastFlip) < interval) {
     remaining = (interval - (millis() - lastFlip)) / 1000;
@@ -645,6 +659,7 @@ void publishSystemState() {
   FirebaseJson json;
   json.set("phase", phase);
   json.set("nextFlip", (int)remaining);
+  json.set("timerInterval", customTimerInterval > 0 ? customTimerInterval : ((dryingMode == "danggit") ? 15 : 10));
   json.set("isPaused", isPaused);
   json.set("coverClosed", coverClosed);
   json.set("sensorFault", sensorFault);
@@ -678,15 +693,13 @@ void executeFlip() {
 
   // Wait for servo to complete movement (typical ~600-800ms for 180°)
   // but cap at MOTOR_STALL_TIMEOUT to prevent overheating if jammed
-  delay(min((unsigned long)800, (unsigned long)MOTOR_STALL_TIMEOUT));
+  delay(800);
 
-  unsigned long flipDuration = millis() - flipStart;
-
-  if (flipDuration >= MOTOR_STALL_TIMEOUT) {
+  if (millis() - flipStart > MOTOR_STALL_TIMEOUT) {
     // Potential stall detected
     if (!motorStalled) {
       motorStalled = true;
-      Serial.println("⚠️ MOTOR STALL: Flip exceeded " + String(MOTOR_STALL_TIMEOUT) + "ms timeout");
+      Serial.println("⚠️ MOTOR STALL DETECTED: Servo timed out");
       showLCDMessage("ERR: MOTOR JAM", "Check mechanism", 3000);
       addLog("MOTOR_STALL", "Flip timeout at " + String(targetAngle) + "°");
       addAlert("Motor stall detected - check flipping mechanism", "HIGH");
@@ -719,8 +732,9 @@ void handleAutoFlip() {
     return;
   }
 
-  unsigned long interval =
-      (dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO;
+  unsigned long interval = customTimerInterval > 0
+                               ? (customTimerInterval * 1000UL)
+                               : ((dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO);
   if (flipMode == "timer" && millis() - lastFlip >= interval)
     executeFlip();
   else if (flipMode == "environment" && sunlight > 60 && humidity < 75 &&

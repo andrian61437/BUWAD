@@ -6,8 +6,10 @@ const Controls = ({
   dryingMode, 
   flipMode,
   coverClosed,
+  timerInterval,
   onDryingModeToggle, 
   onFlipModeToggle, 
+  onTimerIntervalChange,
   onManualOverride,
   onCoverToggle,
   isDeviceOnline,
@@ -23,6 +25,25 @@ const Controls = ({
   const currentDryingMode = dryingMode || 'danggit';
   const currentFlipMode = flipMode || 'timer';
   const isCoverClosed = coverClosed || false;
+  const currentTimerInterval = timerInterval || (currentDryingMode === 'danggit' ? 15 : 10);
+
+  const [showTimerModal, setShowTimerModal] = useState(false);
+  const initialHours = Math.floor(currentTimerInterval / 3600);
+  const initialMinutes = Math.floor((currentTimerInterval % 3600) / 60);
+
+  const [selectedHours, setSelectedHours] = useState(initialHours);
+  const [selectedMinutes, setSelectedMinutes] = useState(initialMinutes || (currentTimerInterval < 60 ? 1 : 0));
+  const [modalHours, setModalHours] = useState(initialHours);
+  const [modalMinutes, setModalMinutes] = useState(initialMinutes || (currentTimerInterval < 60 ? 1 : 0));
+
+  useEffect(() => {
+    const hrs = Math.floor(currentTimerInterval / 3600);
+    const mins = Math.floor((currentTimerInterval % 3600) / 60);
+    setSelectedHours(hrs);
+    setSelectedMinutes(mins || (currentTimerInterval < 60 ? 1 : 0));
+    setModalHours(hrs);
+    setModalMinutes(mins || (currentTimerInterval < 60 ? 1 : 0));
+  }, [currentTimerInterval]);
 
   useEffect(() => {
     return () => { if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
@@ -55,6 +76,31 @@ const Controls = ({
     triggerToast(`Switched to ${mode === 'environment' ? 'Environment-Based' : 'Timer-Based'} flipping`);
   }, [currentFlipMode, onFlipModeToggle, triggerToast, isOnline]);
 
+  const openTimerModal = useCallback(() => {
+    if (!isOnline) {
+      triggerToast('Cannot change timer — ESP32 is offline');
+      return;
+    }
+    setModalHours(selectedHours);
+    setModalMinutes(selectedMinutes);
+    setShowTimerModal(true);
+  }, [isOnline, selectedHours, selectedMinutes, triggerToast]);
+
+  const handleApplyModalTimer = useCallback(() => {
+    if (!isOnline) {
+      triggerToast('Cannot change timer — ESP32 is offline');
+      return;
+    }
+    let totalSeconds = (modalHours * 3600) + (modalMinutes * 60);
+    if (totalSeconds < 60) totalSeconds = 60; // Minimum 1 minute
+    setSelectedHours(modalHours);
+    setSelectedMinutes(modalMinutes);
+    onTimerIntervalChange?.(totalSeconds);
+    setShowTimerModal(false);
+    const label = modalHours > 0 ? (modalMinutes > 0 ? `${modalHours}h ${modalMinutes}m` : `${modalHours}h`) : `${modalMinutes}m`;
+    triggerToast(`Flip interval set to ${label}`);
+  }, [isOnline, modalHours, modalMinutes, onTimerIntervalChange, triggerToast]);
+
   const handleManualFlip = useCallback(() => {
     if (!isOnline) {
       triggerToast('ESP32 is offline');
@@ -78,6 +124,25 @@ const Controls = ({
   const isDanggit = currentDryingMode === 'danggit';
   const isEnvironment = currentFlipMode === 'environment';
 
+  const hoursOptions = Array.from({ length: 13 }, (_, i) => i); // 0 to 12 hours
+  const minutesOptions = Array.from({ length: 60 }, (_, i) => i); // 0 to 59 minutes
+
+  const presets = [
+    { label: '15m', hrs: 0, mins: 15 },
+    { label: '30m', hrs: 0, mins: 30 },
+    { label: '1h', hrs: 1, mins: 0 },
+    { label: '2h', hrs: 2, mins: 0 },
+    { label: '4h', hrs: 4, mins: 0 },
+    { label: '6h', hrs: 6, mins: 0 }
+  ];
+
+  const currentDurationLabel = (hrs = selectedHours, mins = selectedMinutes) => {
+    if (hrs === 0 && mins === 0) return '1 minute';
+    if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
+    if (hrs > 0) return `${hrs} ${hrs === 1 ? 'hour' : 'hours'}`;
+    return `${mins} minutes`;
+  };
+
   const toastPortal = createPortal(
     <AnimatePresence>
       {showToast && (
@@ -92,9 +157,142 @@ const Controls = ({
     document.body
   );
 
+  const timerModalPortal = createPortal(
+    <AnimatePresence>
+      {showTimerModal && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowTimerModal(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ type: 'spring', stiffness: 450, damping: 30 }}
+            className="relative w-full max-w-sm rounded-3xl bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 shadow-2xl overflow-hidden p-5 space-y-4"
+          >
+            <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-white/5">
+              <div>
+                <h3 className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC]">CUSTOMIZE FLIP TIMER</h3>
+                <p className="text-[10px] font-medium text-[#4A5568] dark:text-[#94A3B8]">Set hours and minutes for automatic flipping</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTimerModal(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 dark:bg-white/10 flex items-center justify-center text-[#4A5568] dark:text-[#94A3B8] hover:text-red-500 text-sm font-black"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="text-center py-2 bg-[#00386D]/5 dark:bg-[#6699CC]/10 rounded-2xl border border-[#00386D]/10 dark:border-white/5">
+              <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">SELECTED DURATION</div>
+              <div className="text-xl font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
+                {currentDurationLabel(modalHours, modalMinutes)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5 px-1">QUICK PRESETS</div>
+              <div className="grid grid-cols-6 gap-1">
+                {presets.map((p) => {
+                  const isSelected = modalHours === p.hrs && modalMinutes === p.mins;
+                  return (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => { setModalHours(p.hrs); setModalMinutes(p.mins); }}
+                      className={`py-1.5 rounded-xl text-[11px] font-black transition-colors ${
+                        isSelected
+                          ? 'bg-[#00386D] dark:bg-[#6699CC] text-white shadow-sm'
+                          : 'bg-gray-100 dark:bg-white/5 text-[#00386D] dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-white/10'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 bg-gray-50 dark:bg-[#121620] p-3 rounded-2xl border border-gray-200 dark:border-white/5">
+              <div>
+                <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">HOURS</div>
+                <div className="h-32 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
+                  {hoursOptions.map((h) => {
+                    const active = modalHours === h;
+                    return (
+                      <button
+                        key={`modal-hr-${h}`}
+                        type="button"
+                        onClick={() => setModalHours(h)}
+                        className={`w-full py-1.5 rounded-xl text-center font-black text-xs transition-all ${
+                          active
+                            ? 'bg-[#00386D] dark:bg-[#6699CC] text-white shadow-sm'
+                            : 'text-[#00386D] dark:text-[#94A3B8] hover:bg-white dark:hover:bg-white/5'
+                        }`}
+                      >
+                        {h} {h === 1 ? 'hr' : 'hrs'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">MINUTES</div>
+                <div className="h-32 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
+                  {minutesOptions.map((m) => {
+                    const active = modalMinutes === m;
+                    return (
+                      <button
+                        key={`modal-min-${m}`}
+                        type="button"
+                        onClick={() => setModalMinutes(m)}
+                        className={`w-full py-1.5 rounded-xl text-center font-black text-xs transition-all ${
+                          active
+                            ? 'bg-[#00386D] dark:bg-[#6699CC] text-white shadow-sm'
+                            : 'text-[#00386D] dark:text-[#94A3B8] hover:bg-white dark:hover:bg-white/5'
+                        }`}
+                      >
+                        {m} {m === 1 ? 'min' : 'mins'}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowTimerModal(false)}
+                className="flex-1 py-3 rounded-2xl bg-gray-100 dark:bg-white/10 text-[#4A5568] dark:text-[#94A3B8] font-bold text-xs uppercase"
+              >
+                Cancel
+              </button>
+              <motion.button
+                type="button"
+                onClick={handleApplyModalTimer}
+                whileTap={{ scale: 0.97 }}
+                className="flex-[2] py-3 rounded-2xl bg-[#00386D] dark:bg-[#6699CC] text-white font-black text-xs tracking-wider uppercase shadow-md flex items-center justify-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Confirm & Set
+              </motion.button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>,
+    document.body
+  );
+
   return (
     <>
       {toastPortal}
+      {timerModalPortal}
       <div className="space-y-4">
         {!isOnline && (
           <div className="rounded-2xl border border-red-500/50 bg-red-500/10 dark:bg-red-500/20 px-4 py-3 text-center transition-colors duration-500">
@@ -197,6 +395,41 @@ const Controls = ({
                 </span>
               </button>
             </div>
+
+            {/* Compact Timer Row (Pop-up trigger) */}
+            {!isEnvironment && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mt-3 pt-3 border-t border-gray-100 dark:border-white/5 flex items-center justify-between px-1"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#00386D]/10 dark:bg-[#6699CC]/15 flex items-center justify-center text-[#00386D] dark:text-[#6699CC]">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">CURRENT INTERVAL</div>
+                    <div className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC]">{currentDurationLabel()}</div>
+                  </div>
+                </div>
+
+                <motion.button
+                  type="button"
+                  onClick={openTimerModal}
+                  whileTap={{ scale: 0.95 }}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#00386D] dark:bg-[#6699CC] text-white font-black text-xs tracking-wider uppercase shadow-sm flex items-center gap-1.5"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  SET TIMER
+                </motion.button>
+              </motion.div>
+            )}
           </div>
         </div>
 

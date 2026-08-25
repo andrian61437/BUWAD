@@ -97,7 +97,15 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
     if (!isOnline) return '--';
     if (sensorFault) return '60s*';
     if (isEnvironment) return 'Adaptive';
-    return isDanggit ? '15s' : '10s';
+    const interval = systemState?.timerInterval || (isDanggit ? 15 : 10);
+    const hrs = Math.floor(interval / 3600);
+    const mins = Math.floor((interval % 3600) / 60);
+    const secs = interval % 60;
+    if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+    if (hrs > 0) return `${hrs}h`;
+    if (mins > 0 && secs > 0) return `${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m`;
+    return `${secs}s`;
   };
 
   const handleSystemToggle = () => {

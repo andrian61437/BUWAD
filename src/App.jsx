@@ -59,7 +59,7 @@ function AppContent() {
   ];
   const [sensorData, setSensorData] = useState(null);
   const [systemState, setSystemState] = useState({
-    phase: 'offline', nextFlip: 0, isPaused: false,
+    phase: 'offline', nextFlip: 0, timerInterval: 15, isPaused: false,
     manualOverride: false, dryingMode: 'danggit', flipMode: 'timer',
     coverClosed: false
   });
@@ -177,6 +177,13 @@ function AppContent() {
     writeToSystem({ flipMode: mode, lcdMessage: mode === 'environment' ? "Switching to|ENV-BASED" : "Switching to|TIMER-BASED" });
   }, [addLogEntry, writeToSystem]);
 
+  const handleTimerIntervalChange = useCallback((seconds) => {
+    const val = Math.max(5, Math.min(3600, parseInt(seconds, 10) || 15));
+    setSystemState(prev => ({ ...prev, timerInterval: val }));
+    addLogEntry({ action: 'TIMER INTERVAL CHANGED', details: `Set to ${val}s`, sensorValues: { interval: `${val}s` } });
+    writeToSystem({ timerInterval: val, lcdMessage: `Timer Interval|SET TO ${val}s` });
+  }, [addLogEntry, writeToSystem]);
+
   const handleDismissAlert = useCallback((alertId) => {
     setDismissedAlertIds(prev => prev.includes(alertId) ? prev : [...prev, alertId]);
   }, []);
@@ -287,6 +294,7 @@ function AppContent() {
       setSystemState(prev => ({
         phase: data.phase || prev.phase,
         nextFlip: data.nextFlip !== undefined ? data.nextFlip : prev.nextFlip,
+        timerInterval: data.timerInterval !== undefined ? data.timerInterval : prev.timerInterval,
         isPaused: data.isPaused !== undefined ? data.isPaused : prev.isPaused,
         manualOverride: prev.manualOverride,
         dryingMode: data.dryingMode || prev.dryingMode,
@@ -322,7 +330,16 @@ function AppContent() {
     if (!sensorData || typeof sensorData.sunlight !== 'number') return '--';
     return sensorData.sunlight > 70 ? 'INTENSE' : sensorData.sunlight > 40 ? 'MODERATE' : 'LOW';
   };
-  const formatCountdown = (s) => `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  const formatCountdown = (s) => {
+    if (!s || s <= 0 || isNaN(s)) return '00:00';
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    if (hrs > 0) {
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
   const navItems = [
     { id: 'dashboard', label: t('dashboard'), icon: '▦' },
     { id: 'controls', label: t('controls'), icon: '◷' },
@@ -430,8 +447,10 @@ function AppContent() {
                   dryingMode={systemState.dryingMode} 
                   flipMode={systemState.flipMode} 
                   coverClosed={systemState.coverClosed} 
+                  timerInterval={systemState.timerInterval || (systemState.dryingMode === 'danggit' ? 15 : 10)}
                   onDryingModeToggle={handleDryingModeToggle} 
                   onFlipModeToggle={handleFlipModeToggle} 
+                  onTimerIntervalChange={handleTimerIntervalChange}
                   onManualOverride={handleManualOverride} 
                   onCoverToggle={handleCoverToggle} 
                   isDeviceOnline={isDeviceOnline}
