@@ -6,7 +6,6 @@
 #include <WiFi.h>
 #include <addons/TokenHelper.h>
 
-
 // ===== Pin Definitions =====
 #define DHTPIN 4
 #define DHTTYPE DHT11
@@ -20,17 +19,17 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // ===== Timing Intervals =====
 #define SENSOR_INTERVAL 1000
-#define PUBLISH_INTERVAL 1000
-#define SETTINGS_CHECK_INTERVAL 500
+#define PUBLISH_INTERVAL 2000
+#define SETTINGS_CHECK_INTERVAL 1000
 #define FLIP_DANGGIT 15000
 #define FLIP_BOLINAO 10000
-#define LCD_UPDATE_INTERVAL 500
+#define LCD_UPDATE_INTERVAL 150
 
 // ===== Fallback & Reliability Thresholds =====
-#define SENSOR_FAULT_THRESHOLD 5      // consecutive NaN reads before fault
-#define FALLBACK_FLIP_INTERVAL 60000  // 60s fixed timer when sensor is faulty
-#define MOTOR_STALL_TIMEOUT 3000      // ms - max time to wait for servo move
-#define WIFI_RECONNECT_BASE_DELAY 5000 // ms - initial WiFi reconnect delay
+#define SENSOR_FAULT_THRESHOLD 5        // consecutive NaN reads before fault
+#define FALLBACK_FLIP_INTERVAL 60000    // 60s fixed timer when sensor is faulty
+#define MOTOR_STALL_TIMEOUT 3000        // ms - max time to wait for servo move
+#define WIFI_RECONNECT_BASE_DELAY 5000  // ms - initial WiFi reconnect delay
 #define WIFI_RECONNECT_MAX_DELAY 120000 // ms - max backoff (2 minutes)
 
 // ===== Objects =====
@@ -54,7 +53,8 @@ float lastGoodHumidity = 50.0;
 
 String dryingMode = "danggit";
 String flipMode = "timer";
-int customTimerInterval = 0; // In seconds (0 = use dryingMode preset)
+int danggitTimer = 15; // In seconds (default: 15s)
+int bolinaoTimer = 10; // In seconds (default: 10s)
 bool powerOn = true;
 bool isPaused = false;
 bool flipState = false;
@@ -62,20 +62,21 @@ bool coverClosed = false;
 unsigned long lastPublish = 0;
 unsigned long lastFlip = 0;
 unsigned long lastSensorRead = 0;
-unsigned long lastLCDUpdate = 0;
 unsigned long lastSettingsCheck = 0;
 
 // ===== Fallback & Reliability State =====
-bool sensorFault = false;           // true when DHT sensor is unreliable
-int sensorNaNCount = 0;             // consecutive NaN reading counter
-bool motorStalled = false;          // true if last flip timed out
-bool wifiOffline = false;           // true when WiFi is disconnected
+bool sensorFault = false;            // true when DHT sensor is unreliable
+int sensorNaNCount = 0;              // consecutive NaN reading counter
+bool motorStalled = false;           // true if last flip timed out
+bool wifiOffline = false;            // true when WiFi is disconnected
 unsigned long lastWiFiReconnect = 0; // last WiFi reconnect attempt time
-unsigned long wifiReconnectDelay = WIFI_RECONNECT_BASE_DELAY; // current backoff delay
+unsigned long wifiReconnectDelay =
+    WIFI_RECONNECT_BASE_DELAY; // current backoff delay
 
 // Note: Power is supplied via USB power bank (solar → power bank → ESP32).
 // The power bank provides a steady 5V output, so battery voltage monitoring
-// is not applicable. The ESP32 will simply lose power when the bank is depleted.
+// is not applicable. The ESP32 will simply lose power when the bank is
+// depleted.
 
 // LCD message override
 bool lcdOverrideActive = false;
@@ -89,22 +90,33 @@ unsigned long lastPageChange = 0;
 void connectWiFi();
 void connectFirebase();
 void readSensors();
-void publishSensorData();
-void publishSystemState();
-void checkSettings();
 void executeFlip();
 void handleAutoFlip();
 void handleRainProtection();
+void checkSettings();
+void publishSensorData();
+void publishSystemState();
 void sendHeartbeat();
 void addLog(String action, String details);
 void addAlert(String message, String priority);
 String getTimestamp();
 void initLCD();
+void printLCDLine(int row, String text);
 void updateLCD();
 void showLCDMessage(String line1, String line2, unsigned long durationMs);
 void closeCover();
 void openCover();
 void handleWiFiReconnect();
+void lcdTaskFunc(void *pvParameters);
+
+// Dedicated FreeRTOS background task on Core 0 for smooth uninterrupted LCD
+// updates
+void lcdTaskFunc(void *pvParameters) {
+  for (;;) {
+    updateLCD();
+    vTaskDelay(pdMS_TO_TICKS(150));
+  }
+}
 
 // ===== SETUP =====
 void setup() {
@@ -117,6 +129,10 @@ void setup() {
 
   initLCD();
 
+  printLCDLine(0, "  BUWAD SYSTEM  ");
+  printLCDLine(1, " Starting Up... ");
+  delay(1200);
+
   dht.begin();
   pinMode(RAIN_PIN, INPUT);
   pinMode(LDR_PIN, INPUT);
@@ -128,19 +144,25 @@ void setup() {
   coverClosed = false;
   Serial.println("✓ Servos initialized");
 
-  lcd.setCursor(0, 1);
-  lcd.print("WiFi...");
+  // Step 1: Connect to WiFi with live LCD diagnostics
   connectWiFi();
 
-  lcd.setCursor(0, 1);
-  lcd.print("Firebase...");
+  // Step 2: Connect to Firebase RTDB with live LCD diagnostics
   connectFirebase();
 
+  // Step 3: Initial sensor calibration and baseline read
   readSensors();
   lastRainState = rainDetected;
   lastFlip = millis();
 
-  showLCDMessage("BUWAD Ready!", "System Online", 2000);
+  // Step 4: Ready confirmation banner
+  printLCDLine(0, "ALL SYSTEMS GO! ");
+  printLCDLine(1, "Starting Dryer..");
+  delay(1500);
+
+  // Launch dedicated FreeRTOS LCD thread on Core 0 AFTER diagnostic sequence
+  // finishes
+  xTaskCreatePinnedToCore(lcdTaskFunc, "LCD_Core0", 4096, NULL, 1, NULL, 0);
 
   Serial.println("\n✓ System Ready!");
   Serial.print("  Danggit: ");
@@ -164,12 +186,20 @@ void initLCD() {
   Serial.println("✓ LCD initialized");
 }
 
+void printLCDLine(int row, String text) {
+  lcd.setCursor(0, row);
+  char buffer[17];
+  memset(buffer, ' ', 16);
+  buffer[16] = '\0';
+  for (int i = 0; i < text.length() && i < 16; i++) {
+    buffer[i] = text[i];
+  }
+  lcd.print(buffer);
+}
+
 void showLCDMessage(String line1, String line2, unsigned long durationMs) {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(line1);
-  lcd.setCursor(0, 1);
-  lcd.print(line2);
+  printLCDLine(0, line1);
+  printLCDLine(1, line2);
   lcdOverrideActive = true;
   lcdOverrideEnd = millis() + durationMs;
 }
@@ -189,102 +219,73 @@ void openCover() {
 void updateLCD() {
   unsigned long now = millis();
 
+  // If a temporary event banner is active, let it display until its timer
+  // expires
   if (lcdOverrideActive) {
     if (now >= lcdOverrideEnd) {
       lcdOverrideActive = false;
-      lcd.clear();
-      lastPageChange = 0;
     } else {
       return;
     }
   }
 
-  if (now - lastLCDUpdate < LCD_UPDATE_INTERVAL)
+  static unsigned long lastTick = 0;
+  if (now - lastTick < LCD_UPDATE_INTERVAL)
     return;
-  lastLCDUpdate = now;
+  lastTick = now;
 
   if (!powerOn) {
-    lcd.setCursor(0, 0);
-    lcd.print("BUWAD OFFLINE");
-    lcd.setCursor(0, 1);
-    lcd.print("                ");
+    printLCDLine(0, " BUWAD SYSTEM ");
+    printLCDLine(1, " [POWERED OFF]  ");
     return;
   }
 
-  if (now - lastPageChange > 3000) {
-    lcdPage = (lcdPage + 1) % 5;
-    lastPageChange = now;
-    lcd.clear();
+  // --- LINE 0: Live Sensor Telemetry ---
+  char line0[17];
+  char sunLevel = (sunlight > 70) ? 'H' : ((sunlight > 40) ? 'M' : 'L');
+  if (rainDetected) {
+    snprintf(line0, sizeof(line0), "T:%2.0fC H:%2d%% RAIN!", temperature,
+             (int)humidity);
+  } else {
+    snprintf(line0, sizeof(line0), "T:%2.0fC H:%2d%% S:%c", temperature,
+             (int)humidity, sunLevel);
   }
+  printLCDLine(0, String(line0));
 
-  switch (lcdPage) {
-  case 0:
-    lcd.setCursor(0, 0);
-    lcd.print("T:");
-    lcd.print(temperature, 1);
-    lcd.print("C  H:");
-    lcd.print(humidity, 0);
-    lcd.print("%");
-    lcd.setCursor(0, 1);
-    lcd.print("Sun:");
-    lcd.print(sunlight);
-    lcd.print("%   NPM Rain:");
-    lcd.print(rainDetected ? "W" : "D");
-    break;
-  case 1:
-    lcd.setCursor(0, 0);
-    lcd.print("Mode:");
-    lcd.print(dryingMode == "danggit" ? "DANGGIT" : "BOLINAO");
-    lcd.setCursor(0, 1);
-    lcd.print("Flip:");
-    lcd.print(flipMode == "timer" ? "TIMER" : "ENV");
-    break;
-  case 2: {
-    lcd.setCursor(0, 0);
-    if (isPaused)
-      lcd.print("PAUSED        ");
-    else if (rainDetected)
-      lcd.print("RAIN MODE     ");
-    else if (coverClosed)
-      lcd.print("COVER CLOSED  ");
-    else
-      lcd.print("POWER: ON     ");
+  // --- LINE 1: Fish Profile & Flip Countdown Timer ---
+  char line1[17];
+  String profileCode = (dryingMode == "danggit") ? "DAN" : "BOL";
 
-    lcd.setCursor(0, 1);
-    lcd.print("Next:");
-    unsigned long interval = customTimerInterval > 0
-                                 ? (customTimerInterval * 1000UL)
-                                 : ((dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO);
+  if (isPaused) {
+    snprintf(line1, sizeof(line1), "%s [PAUSED]", profileCode.c_str());
+  } else if (coverClosed) {
+    snprintf(line1, sizeof(line1), "%s [COVER CLSD]", profileCode.c_str());
+  } else if (flipMode == "environment") {
+    snprintf(line1, sizeof(line1), "%s ENV-ADAPTIVE", profileCode.c_str());
+  } else {
+    unsigned long activeSeconds =
+        (dryingMode == "danggit") ? danggitTimer : bolinaoTimer;
+    unsigned long interval = activeSeconds * 1000UL;
     unsigned long remaining = 0;
     if (millis() - lastFlip < interval)
       remaining = (interval - (millis() - lastFlip)) / 1000;
-    lcd.print(remaining);
-    lcd.print("s    ");
-    break;
-  }
-  case 3:
-    lcd.setCursor(0, 0);
-    lcd.print(WiFi.status() == WL_CONNECTED ? "WiFi:CONNECTED"
-                                            : "WiFi:OFFLINE");
-    lcd.setCursor(0, 1);
-    lcd.print(firebaseOK ? "FB:ONLINE    " : "FB:OFFLINE   ");
-    break;
-  case 4: {
-    // Fallback & Health Status Page
-    lcd.setCursor(0, 0);
-    if (sensorFault)
-      lcd.print("SENSOR FAULT!   ");
-    else if (motorStalled)
-      lcd.print("MOTOR JAM!      ");
-    else
-      lcd.print("Health: OK      ");
 
-    lcd.setCursor(0, 1);
-    lcd.print("PWR:USB ");
-    lcd.print(sensorFault ? "TMR" : "NRM");
-    break;
+    unsigned long hrs = remaining / 3600;
+    unsigned long mins = (remaining % 3600) / 60;
+    unsigned long secs = remaining % 60;
+
+    if (hrs > 0) {
+      snprintf(line1, sizeof(line1), "%s %02luh:%02lum:%02lus",
+               profileCode.c_str(), hrs, mins, secs);
+    } else if (mins > 0) {
+      snprintf(line1, sizeof(line1), "%s Next: %02lu:%02lu",
+               profileCode.c_str(), mins, secs);
+    } else {
+      snprintf(line1, sizeof(line1), "%s Next: %2lus", profileCode.c_str(),
+               secs);
+    }
   }
-  }
+  printLCDLine(1, String(line1));
 }
 
 void loop() {
@@ -304,8 +305,6 @@ void loop() {
     readSensors();
     lastSensorRead = now;
   }
-
-  updateLCD();
 
   if (now - lastSettingsCheck >= SETTINGS_CHECK_INTERVAL) {
     checkSettings();
@@ -332,27 +331,63 @@ void loop() {
   delay(10);
 }
 
+bool settingsInitialized = false;
+String lastProcessedLcdMessage = "";
+
 void checkSettings() {
   if (!firebaseOK)
     return;
 
   if (Firebase.RTDB.getJSON(&fbdo, "system")) {
-    FirebaseJson& json = fbdo.jsonObject();
+    FirebaseJson &json = fbdo.jsonObject();
     FirebaseJsonData jsonData;
 
-    if (json.get(jsonData, "lcdMessage") && jsonData.success && jsonData.stringValue.length() > 0) {
+    // --- On First Boot: Read Initial State Quietly Without Flashing Banners
+    // ---
+    if (!settingsInitialized) {
+      if (json.get(jsonData, "powerOn") && jsonData.success)
+        powerOn = jsonData.boolValue;
+      if (json.get(jsonData, "dryingMode") && jsonData.success &&
+          jsonData.stringValue.length() > 0)
+        dryingMode = jsonData.stringValue;
+      if (json.get(jsonData, "flipMode") && jsonData.success &&
+          jsonData.stringValue.length() > 0)
+        flipMode = jsonData.stringValue;
+      if (json.get(jsonData, "danggitTimer") && jsonData.success &&
+          jsonData.intValue >= 5)
+        danggitTimer = jsonData.intValue;
+      if (json.get(jsonData, "bolinaoTimer") && jsonData.success &&
+          jsonData.intValue >= 5)
+        bolinaoTimer = jsonData.intValue;
+      if (json.get(jsonData, "coverClosed") && jsonData.success)
+        coverClosed = jsonData.boolValue;
+
+      // Delete any stale lcdMessage from previous sessions
+      Firebase.RTDB.deleteNode(&fbdo, "system/lcdMessage");
+      settingsInitialized = true;
+      Serial.println("✓ Initial system settings loaded from Firebase");
+      return;
+    }
+
+    // --- Process One-Time Custom LCD Flash Messages ---
+    if (json.get(jsonData, "lcdMessage") && jsonData.success) {
       String msg = jsonData.stringValue;
-      int separator = msg.indexOf('|');
-      String line1, line2;
-      if (separator > 0) {
-        line1 = msg.substring(0, separator);
-        line2 = msg.substring(separator + 1);
-      } else {
-        line1 = msg;
-        line2 = "";
+      if (msg.length() > 0 && msg != lastProcessedLcdMessage) {
+        lastProcessedLcdMessage = msg;
+        int separator = msg.indexOf('|');
+        String line1, line2;
+        if (separator > 0) {
+          line1 = msg.substring(0, separator);
+          line2 = msg.substring(separator + 1);
+        } else {
+          line1 = msg;
+          line2 = "";
+        }
+        showLCDMessage(line1, line2, 2500);
+        Firebase.RTDB.deleteNode(&fbdo, "system/lcdMessage");
+      } else if (msg.length() == 0) {
+        lastProcessedLcdMessage = "";
       }
-      showLCDMessage(line1, line2, 2000);
-      Firebase.RTDB.setString(&fbdo, "system/lcdMessage", "");
     }
 
     if (json.get(jsonData, "powerOn") && jsonData.success) {
@@ -378,11 +413,16 @@ void checkSettings() {
           newMode != dryingMode) {
         dryingMode = newMode;
         lastFlip = millis();
+        int activeT = (dryingMode == "danggit") ? danggitTimer : bolinaoTimer;
         Serial.print("📝 Drying mode: ");
-        Serial.println(dryingMode);
+        Serial.print(dryingMode);
+        Serial.print(" (Timer: ");
+        Serial.print(activeT);
+        Serial.println("s)");
         showLCDMessage("Switching to",
-                       newMode == "danggit" ? "DANGGIT" : "BOLINAO", 2000);
-        addLog("DRYING_MODE", dryingMode);
+                       newMode == "danggit" ? "DANGGIT" : "BOLINAO", 2500);
+        addLog("DRYING_MODE", dryingMode + " (" + String(activeT) + "s)");
+        publishSystemState();
       }
     }
 
@@ -395,23 +435,41 @@ void checkSettings() {
         Serial.print("📝 Flip mode: ");
         Serial.println(flipMode);
         showLCDMessage("Switching to",
-                       newMode == "timer" ? "TIMER-BASED" : "ENV-BASED", 2000);
+                       newMode == "timer" ? "TIMER-BASED" : "ENV-BASED", 2500);
         addLog("FLIP_MODE", flipMode);
       }
     }
 
-    if (json.get(jsonData, "timerInterval") && jsonData.success) {
-      int newInterval = jsonData.intValue;
-      if (newInterval >= 5 && newInterval <= 3600 && newInterval != customTimerInterval) {
-        customTimerInterval = newInterval;
-        Serial.print("⏱️ Custom timer interval: ");
-        Serial.print(customTimerInterval);
-        Serial.println("s");
-        addLog("TIMER_INTERVAL", String(customTimerInterval) + "s");
+    if (json.get(jsonData, "danggitTimer") && jsonData.success) {
+      int newD = jsonData.intValue;
+      if (newD >= 5 && newD <= 86400 && newD != danggitTimer) {
+        danggitTimer = newD;
+        if (dryingMode == "danggit") {
+          lastFlip = millis();
+          showLCDMessage("DANGGIT TIMER",
+                         "Set: " + String(danggitTimer) + "s", 2500);
+        }
+        addLog("DANGGIT_TIMER", String(danggitTimer) + "s");
+        publishSystemState();
       }
     }
 
-    if (json.get(jsonData, "manualFlip") && jsonData.success && jsonData.boolValue) {
+    if (json.get(jsonData, "bolinaoTimer") && jsonData.success) {
+      int newB = jsonData.intValue;
+      if (newB >= 5 && newB <= 86400 && newB != bolinaoTimer) {
+        bolinaoTimer = newB;
+        if (dryingMode == "bolinao") {
+          lastFlip = millis();
+          showLCDMessage("BOLINAO TIMER",
+                         "Set: " + String(bolinaoTimer) + "s", 2500);
+        }
+        addLog("BOLINAO_TIMER", String(bolinaoTimer) + "s");
+        publishSystemState();
+      }
+    }
+
+    if (json.get(jsonData, "manualFlip") && jsonData.success &&
+        jsonData.boolValue) {
       Serial.println(">>> MANUAL FLIP REQUESTED! <<<");
       Firebase.RTDB.setBool(&fbdo, "system/manualFlip", false);
 
@@ -435,7 +493,8 @@ void checkSettings() {
       }
     }
 
-    if (json.get(jsonData, "manualCover") && jsonData.success && jsonData.boolValue) {
+    if (json.get(jsonData, "manualCover") && jsonData.success &&
+        jsonData.boolValue) {
       Serial.println(">>> MANUAL COVER TOGGLE! <<<");
       Firebase.RTDB.setBool(&fbdo, "system/manualCover", false);
 
@@ -464,28 +523,45 @@ void checkSettings() {
 }
 
 void connectWiFi() {
-  Serial.print("Connecting to WiFi");
+  Serial.print("Connecting to WiFi: ");
+  Serial.println(WIFI_SSID);
+  printLCDLine(0, "Connecting WiFi ");
+  printLCDLine(1, String(WIFI_SSID));
+
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 30) {
-    delay(500);
+    delay(400);
     Serial.print(".");
     attempts++;
+    String dots = "WiFi";
+    for (int d = 0; d < (attempts % 12); d++) {
+      dots += ".";
+    }
+    printLCDLine(0, dots);
   }
   Serial.println();
+
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("✓ WiFi Connected!");
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("WiFi OK!");
-    delay(1500);
+    Serial.print("  IP Address: ");
+    Serial.println(WiFi.localIP());
+    printLCDLine(0, "WiFi: CONNECTED ");
+    printLCDLine(1, "IP:" + WiFi.localIP().toString());
+    delay(1800);
   } else {
     Serial.println("✗ WiFi Failed!");
+    printLCDLine(0, "WiFi: FAILED!   ");
+    printLCDLine(1, "Offline Mode... ");
+    delay(1800);
   }
 }
 
 void connectFirebase() {
   Serial.println("\nConnecting to Firebase...");
+  printLCDLine(0, "Connecting Cloud");
+  printLCDLine(1, "Firebase RTDB...");
+
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   auth.user.email = USER_EMAIL;
@@ -498,8 +574,13 @@ void connectFirebase() {
     firebaseOK = Firebase.ready();
     if (firebaseOK)
       break;
-    delay(500);
+    delay(400);
     Serial.print(".");
+    String dots = "Cloud Link";
+    for (int d = 0; d < (i % 6); d++) {
+      dots += ".";
+    }
+    printLCDLine(1, dots);
   }
 
   if (firebaseOK) {
@@ -511,12 +592,14 @@ void connectFirebase() {
     publishSensorData();
     publishSystemState();
     addLog("SYSTEM_START", "ESP32 online");
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Firebase OK!");
+    printLCDLine(0, "Firebase: ONLINE");
+    printLCDLine(1, "Cloud Synced OK ");
     delay(1500);
   } else {
     Serial.println("\n✗ Firebase Failed!");
+    printLCDLine(0, "Firebase: FAILED");
+    printLCDLine(1, "Local Mode Only ");
+    delay(1800);
   }
 }
 
@@ -551,18 +634,22 @@ void readSensors() {
     // Trigger sensor fault after threshold consecutive failures
     if (sensorNaNCount >= SENSOR_FAULT_THRESHOLD && !sensorFault) {
       sensorFault = true;
-      Serial.println("⚠️ SENSOR FAULT: DHT failed " + String(SENSOR_FAULT_THRESHOLD) + " consecutive reads");
-      Serial.println("   Fallback: Switching to fixed " + String(FALLBACK_FLIP_INTERVAL / 1000) + "s timer mode");
+      Serial.println("⚠️ SENSOR FAULT: DHT failed " +
+                     String(SENSOR_FAULT_THRESHOLD) + " consecutive reads");
+      Serial.println("   Fallback: Switching to fixed " +
+                     String(FALLBACK_FLIP_INTERVAL / 1000) + "s timer mode");
       showLCDMessage("SENSOR FAULT!", "TIMER MODE ON", 3000);
-      addLog("SENSOR_FAULT", "DHT failed - fallback to " + String(FALLBACK_FLIP_INTERVAL / 1000) + "s timer");
-      addAlert("Sensor fault detected - system running on fallback timer mode", "HIGH");
+      addLog("SENSOR_FAULT", "DHT failed - fallback to " +
+                                 String(FALLBACK_FLIP_INTERVAL / 1000) +
+                                 "s timer");
+      addAlert("Sensor fault detected - system running on fallback timer mode",
+               "HIGH");
     }
   }
 
   sunlight = constrain(map(analogRead(LDR_PIN), 0, 4095, 0, 100), 0, 100);
   rainDetected = (digitalRead(RAIN_PIN) == HIGH);
 }
-
 
 void handleWiFiReconnect() {
   bool currentlyConnected = (WiFi.status() == WL_CONNECTED);
@@ -596,7 +683,8 @@ void handleWiFiReconnect() {
   unsigned long now = millis();
   if (now - lastWiFiReconnect >= wifiReconnectDelay) {
     lastWiFiReconnect = now;
-    Serial.println("📡 WiFi reconnect attempt (backoff: " + String(wifiReconnectDelay / 1000) + "s)...");
+    Serial.println("📡 WiFi reconnect attempt (backoff: " +
+                   String(wifiReconnectDelay / 1000) + "s)...");
     WiFi.disconnect();
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -609,8 +697,10 @@ void handleWiFiReconnect() {
 
     if (WiFi.status() != WL_CONNECTED) {
       // Increase backoff (exponential, capped)
-      wifiReconnectDelay = min(wifiReconnectDelay * 2, (unsigned long)WIFI_RECONNECT_MAX_DELAY);
-      Serial.println("   WiFi still offline. Next attempt in " + String(wifiReconnectDelay / 1000) + "s");
+      wifiReconnectDelay =
+          min(wifiReconnectDelay * 2, (unsigned long)WIFI_RECONNECT_MAX_DELAY);
+      Serial.println("   WiFi still offline. Next attempt in " +
+                     String(wifiReconnectDelay / 1000) + "s");
     }
   }
 }
@@ -634,9 +724,9 @@ void publishSystemState() {
   if (!firebaseOK)
     return;
 
-  unsigned long interval = customTimerInterval > 0
-                               ? (customTimerInterval * 1000UL)
-                               : ((dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO);
+  unsigned long activeSeconds =
+      (dryingMode == "danggit") ? danggitTimer : bolinaoTimer;
+  unsigned long interval = activeSeconds * 1000UL;
   unsigned long remaining = 0;
   if (millis() > lastFlip && (millis() - lastFlip) < interval) {
     remaining = (interval - (millis() - lastFlip)) / 1000;
@@ -659,7 +749,9 @@ void publishSystemState() {
   FirebaseJson json;
   json.set("phase", phase);
   json.set("nextFlip", (int)remaining);
-  json.set("timerInterval", customTimerInterval > 0 ? customTimerInterval : ((dryingMode == "danggit") ? 15 : 10));
+  json.set("timerInterval", (int)activeSeconds);
+  json.set("danggitTimer", danggitTimer);
+  json.set("bolinaoTimer", bolinaoTimer);
   json.set("isPaused", isPaused);
   json.set("coverClosed", coverClosed);
   json.set("sensorFault", sensorFault);
@@ -722,19 +814,21 @@ void handleAutoFlip() {
   if (!powerOn || isPaused || rainDetected || coverClosed)
     return;
 
-  // If sensor is faulty, override to fixed fallback timer regardless of flipMode
+  // If sensor is faulty, override to fixed fallback timer regardless of
+  // flipMode
   if (sensorFault) {
     if (millis() - lastFlip >= FALLBACK_FLIP_INTERVAL) {
       Serial.println("⏱️ Fallback timer flip (sensor fault active)");
       executeFlip();
-      addLog("FALLBACK_FLIP", "Sensor fault - fixed " + String(FALLBACK_FLIP_INTERVAL / 1000) + "s interval");
+      addLog("FALLBACK_FLIP", "Sensor fault - fixed " +
+                                  String(FALLBACK_FLIP_INTERVAL / 1000) +
+                                  "s interval");
     }
     return;
   }
 
-  unsigned long interval = customTimerInterval > 0
-                               ? (customTimerInterval * 1000UL)
-                               : ((dryingMode == "danggit") ? FLIP_DANGGIT : FLIP_BOLINAO);
+  unsigned long interval =
+      ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer) * 1000UL;
   if (flipMode == "timer" && millis() - lastFlip >= interval)
     executeFlip();
   else if (flipMode == "environment" && sunlight > 60 && humidity < 75 &&

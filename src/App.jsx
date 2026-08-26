@@ -59,8 +59,8 @@ function AppContent() {
   ];
   const [sensorData, setSensorData] = useState(null);
   const [systemState, setSystemState] = useState({
-    phase: 'offline', nextFlip: 0, timerInterval: 15, isPaused: false,
-    manualOverride: false, dryingMode: 'danggit', flipMode: 'timer',
+    phase: 'offline', nextFlip: 0, timerInterval: 15, danggitTimer: 15, bolinaoTimer: 10,
+    isPaused: false, manualOverride: false, dryingMode: 'danggit', flipMode: 'timer',
     coverClosed: false
   });
   const [alerts, setAlerts] = useState([]);
@@ -162,27 +162,64 @@ function AppContent() {
   const handleCoverToggle = useCallback(() => {
     const isCurrentlyClosed = systemState.coverClosed;
     addLogEntry({ action: 'COVER NOW', details: isCurrentlyClosed ? 'Opening cover' : 'Closing cover' });
-    writeToSystem({ manualCover: true, lcdMessage: isCurrentlyClosed ? "Cover Now|COVER OPENED" : "Cover Now|COVER CLOSED" });
+    writeToSystem({ manualCover: true });
   }, [systemState.coverClosed, addLogEntry, writeToSystem]);
   
   const handleDryingModeToggle = useCallback((mode) => {
-    setSystemState(prev => prev.dryingMode === mode ? prev : { ...prev, dryingMode: mode });
-    addLogEntry({ action: 'DRYING MODE CHANGED', details: `Switched to ${mode}`, sensorValues: { profile: mode, cycleInterval: mode === 'danggit' ? '15s' : '10s' } });
-    writeToSystem({ dryingMode: mode, lcdMessage: mode === 'danggit' ? "Switching to|DANGGIT" : "Switching to|BOLINAO" });
-  }, [addLogEntry, writeToSystem]);
+    setSystemState(prev => {
+      if (prev.dryingMode === mode) return prev;
+      const activeTimer = mode === 'danggit' ? (prev.danggitTimer || 15) : (prev.bolinaoTimer || 10);
+      return { 
+        ...prev, 
+        dryingMode: mode, 
+        timerInterval: activeTimer,
+        nextFlip: activeTimer 
+      };
+    });
+    const isDanggit = mode === 'danggit';
+    const activeTimer = isDanggit ? (systemState.danggitTimer || 15) : (systemState.bolinaoTimer || 10);
+    addLogEntry({ 
+      action: 'DRYING MODE CHANGED', 
+      details: `Switched to ${mode} (Timer: ${activeTimer}s)`, 
+      sensorValues: { profile: mode, cycleInterval: `${activeTimer}s` } 
+    });
+    writeToSystem({ 
+      dryingMode: mode, 
+      timerInterval: activeTimer,
+      nextFlip: activeTimer 
+    });
+  }, [systemState.danggitTimer, systemState.bolinaoTimer, addLogEntry, writeToSystem]);
 
   const handleFlipModeToggle = useCallback((mode) => {
     setSystemState(prev => prev.flipMode === mode ? prev : { ...prev, flipMode: mode });
     addLogEntry({ action: 'FLIP MODE CHANGED', details: `Switched to ${mode}` });
-    writeToSystem({ flipMode: mode, lcdMessage: mode === 'environment' ? "Switching to|ENV-BASED" : "Switching to|TIMER-BASED" });
+    writeToSystem({ flipMode: mode });
   }, [addLogEntry, writeToSystem]);
 
-  const handleTimerIntervalChange = useCallback((seconds) => {
-    const val = Math.max(5, Math.min(3600, parseInt(seconds, 10) || 15));
-    setSystemState(prev => ({ ...prev, timerInterval: val }));
-    addLogEntry({ action: 'TIMER INTERVAL CHANGED', details: `Set to ${val}s`, sensorValues: { interval: `${val}s` } });
-    writeToSystem({ timerInterval: val, lcdMessage: `Timer Interval|SET TO ${val}s` });
-  }, [addLogEntry, writeToSystem]);
+  const handleTimerIntervalChange = useCallback((seconds, targetMode) => {
+    const val = Math.max(5, Math.min(86400, parseInt(seconds, 10) || 15));
+    const mode = targetMode || systemState.dryingMode || 'danggit';
+    const isDanggit = mode === 'danggit';
+
+    setSystemState(prev => ({
+      ...prev,
+      [isDanggit ? 'danggitTimer' : 'bolinaoTimer']: val,
+      timerInterval: val,
+      nextFlip: val
+    }));
+
+    addLogEntry({ 
+      action: 'TIMER INTERVAL CHANGED', 
+      details: `Set ${isDanggit ? 'Danggit' : 'Bolinao'} timer to ${val}s`, 
+      sensorValues: { profile: mode, interval: `${val}s` } 
+    });
+
+    writeToSystem({ 
+      [isDanggit ? 'danggitTimer' : 'bolinaoTimer']: val,
+      timerInterval: val,
+      nextFlip: val
+    });
+  }, [systemState.dryingMode, addLogEntry, writeToSystem]);
 
   const handleDismissAlert = useCallback((alertId) => {
     setDismissedAlertIds(prev => prev.includes(alertId) ? prev : [...prev, alertId]);
@@ -291,16 +328,24 @@ function AppContent() {
       const data = snapshot.val();
       if (!data) return;
       if (data.powerOn !== undefined) setIsSystemPoweredOn(data.powerOn);
-      setSystemState(prev => ({
-        phase: data.phase || prev.phase,
-        nextFlip: data.nextFlip !== undefined ? data.nextFlip : prev.nextFlip,
-        timerInterval: data.timerInterval !== undefined ? data.timerInterval : prev.timerInterval,
-        isPaused: data.isPaused !== undefined ? data.isPaused : prev.isPaused,
-        manualOverride: prev.manualOverride,
-        dryingMode: data.dryingMode || prev.dryingMode,
-        flipMode: data.flipMode || prev.flipMode,
-        coverClosed: data.coverClosed !== undefined ? data.coverClosed : prev.coverClosed
-      }));
+      setSystemState(prev => {
+        const dTimer = data.danggitTimer !== undefined ? data.danggitTimer : (prev.danggitTimer || 15);
+        const bTimer = data.bolinaoTimer !== undefined ? data.bolinaoTimer : (prev.bolinaoTimer || 10);
+        const curMode = data.dryingMode || prev.dryingMode || 'danggit';
+        const curTimer = data.timerInterval !== undefined ? data.timerInterval : (curMode === 'danggit' ? dTimer : bTimer);
+        return {
+          phase: data.phase || prev.phase,
+          nextFlip: data.nextFlip !== undefined ? data.nextFlip : prev.nextFlip,
+          timerInterval: curTimer,
+          danggitTimer: dTimer,
+          bolinaoTimer: bTimer,
+          isPaused: data.isPaused !== undefined ? data.isPaused : prev.isPaused,
+          manualOverride: prev.manualOverride,
+          dryingMode: curMode,
+          flipMode: data.flipMode || prev.flipMode,
+          coverClosed: data.coverClosed !== undefined ? data.coverClosed : prev.coverClosed
+        };
+      });
     });
     const unsubAlerts = onValue(ref(database, 'alerts'), (snapshot) => {
       const data = snapshot.val();
@@ -447,7 +492,9 @@ function AppContent() {
                   dryingMode={systemState.dryingMode} 
                   flipMode={systemState.flipMode} 
                   coverClosed={systemState.coverClosed} 
-                  timerInterval={systemState.timerInterval || (systemState.dryingMode === 'danggit' ? 15 : 10)}
+                  timerInterval={systemState.timerInterval}
+                  danggitTimer={systemState.danggitTimer || 15}
+                  bolinaoTimer={systemState.bolinaoTimer || 10}
                   onDryingModeToggle={handleDryingModeToggle} 
                   onFlipModeToggle={handleFlipModeToggle} 
                   onTimerIntervalChange={handleTimerIntervalChange}

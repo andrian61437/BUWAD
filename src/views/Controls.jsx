@@ -7,6 +7,8 @@ const Controls = ({
   flipMode,
   coverClosed,
   timerInterval,
+  danggitTimer = 15,
+  bolinaoTimer = 10,
   onDryingModeToggle, 
   onFlipModeToggle, 
   onTimerIntervalChange,
@@ -25,7 +27,11 @@ const Controls = ({
   const currentDryingMode = dryingMode || 'danggit';
   const currentFlipMode = flipMode || 'timer';
   const isCoverClosed = coverClosed || false;
-  const currentTimerInterval = timerInterval || (currentDryingMode === 'danggit' ? 15 : 10);
+  const isDanggit = currentDryingMode === 'danggit';
+
+  // Independent saved timer interval for the active profile
+  const activeProfileTimer = isDanggit ? (danggitTimer || 15) : (bolinaoTimer || 10);
+  const currentTimerInterval = timerInterval || activeProfileTimer;
 
   const [showTimerModal, setShowTimerModal] = useState(false);
   const initialHours = Math.floor(currentTimerInterval / 3600);
@@ -37,13 +43,14 @@ const Controls = ({
   const [modalMinutes, setModalMinutes] = useState(initialMinutes || (currentTimerInterval < 60 ? 1 : 0));
 
   useEffect(() => {
-    const hrs = Math.floor(currentTimerInterval / 3600);
-    const mins = Math.floor((currentTimerInterval % 3600) / 60);
+    const targetTimer = isDanggit ? (danggitTimer || 15) : (bolinaoTimer || 10);
+    const hrs = Math.floor(targetTimer / 3600);
+    const mins = Math.floor((targetTimer % 3600) / 60);
     setSelectedHours(hrs);
-    setSelectedMinutes(mins || (currentTimerInterval < 60 ? 1 : 0));
+    setSelectedMinutes(mins || (targetTimer < 60 ? 1 : 0));
     setModalHours(hrs);
-    setModalMinutes(mins || (currentTimerInterval < 60 ? 1 : 0));
-  }, [currentTimerInterval]);
+    setModalMinutes(mins || (targetTimer < 60 ? 1 : 0));
+  }, [currentDryingMode, danggitTimer, bolinaoTimer, isDanggit]);
 
   useEffect(() => {
     return () => { if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
@@ -63,8 +70,12 @@ const Controls = ({
     }
     if (mode === currentDryingMode) return;
     onDryingModeToggle?.(mode);
-    triggerToast(`Switched to ${mode === 'danggit' ? 'Danggit' : 'Bolinao'}`);
-  }, [currentDryingMode, onDryingModeToggle, triggerToast, isOnline]);
+    const savedTime = mode === 'danggit' ? (danggitTimer || 15) : (bolinaoTimer || 10);
+    const timeLabel = savedTime >= 60 
+      ? (Math.floor(savedTime / 60) + 'm') 
+      : (savedTime + 's');
+    triggerToast(`Switched to ${mode === 'danggit' ? 'Danggit' : 'Bolinao'} (${timeLabel} timer)`);
+  }, [currentDryingMode, danggitTimer, bolinaoTimer, onDryingModeToggle, triggerToast, isOnline]);
 
   const handleFlipModeSelect = useCallback((mode) => {
     if (!isOnline) {
@@ -92,14 +103,15 @@ const Controls = ({
       return;
     }
     let totalSeconds = (modalHours * 3600) + (modalMinutes * 60);
-    if (totalSeconds < 60) totalSeconds = 60; // Minimum 1 minute
+    if (totalSeconds < 5) totalSeconds = 5; // Minimum 5s
     setSelectedHours(modalHours);
     setSelectedMinutes(modalMinutes);
-    onTimerIntervalChange?.(totalSeconds);
+    onTimerIntervalChange?.(totalSeconds, currentDryingMode);
     setShowTimerModal(false);
-    const label = modalHours > 0 ? (modalMinutes > 0 ? `${modalHours}h ${modalMinutes}m` : `${modalHours}h`) : `${modalMinutes}m`;
-    triggerToast(`Flip interval set to ${label}`);
-  }, [isOnline, modalHours, modalMinutes, onTimerIntervalChange, triggerToast]);
+    const label = modalHours > 0 ? (modalMinutes > 0 ? `${modalHours}h ${modalMinutes}m` : `${modalHours}h`) : (modalMinutes > 0 ? `${modalMinutes}m` : `${totalSeconds}s`);
+    const profileName = isDanggit ? 'Danggit' : 'Bolinao';
+    triggerToast(`${profileName} timer saved: ${label}`);
+  }, [isOnline, modalHours, modalMinutes, onTimerIntervalChange, currentDryingMode, isDanggit, triggerToast]);
 
   const handleManualFlip = useCallback(() => {
     if (!isOnline) {
@@ -121,7 +133,6 @@ const Controls = ({
     setTimeout(() => { setIsManualCover(false); triggerToast(isCoverClosed ? 'Cover opened' : 'Cover closed'); }, 800);
   }, [isCoverClosed, onCoverToggle, triggerToast, isOnline]);
 
-  const isDanggit = currentDryingMode === 'danggit';
   const isEnvironment = currentFlipMode === 'environment';
 
   const hoursOptions = Array.from({ length: 13 }, (_, i) => i); // 0 to 12 hours
@@ -177,8 +188,12 @@ const Controls = ({
           >
             <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-white/5">
               <div>
-                <h3 className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC]">CUSTOMIZE FLIP TIMER</h3>
-                <p className="text-[10px] font-medium text-[#4A5568] dark:text-[#94A3B8]">Set hours and minutes for automatic flipping</p>
+                <h3 className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC]">
+                  {isDanggit ? 'DANGGIT FLIP TIMER' : 'BOLINAO FLIP TIMER'}
+                </h3>
+                <p className="text-[10px] font-medium text-[#4A5568] dark:text-[#94A3B8]">
+                  {isDanggit ? 'Saved auto-flip interval for Danggit' : 'Saved auto-flip interval for Bolinao'}
+                </p>
               </div>
               <button
                 type="button"
