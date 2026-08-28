@@ -106,7 +106,17 @@ const translations = {
     rainDetectedLabel: 'RAIN DETECTED',
     noRainDetectedLabel: 'NO RAIN DETECTED',
     buwadTurnedOff: 'BUWAD IS TURNED OFF',
-    coverIsOn: 'COVER IS ON'
+    coverIsOn: 'COVER IS ON',
+    analytics: 'ANALYTICS',
+    batchSummary: 'BATCH SUMMARY',
+    exportCsv: 'EXPORT DATA (.CSV)',
+    dryingEfficiency: 'SOLAR EFFICIENCY',
+    thermalGain: 'HEAT RETENTION',
+    sensorTrends: '24H SENSOR TRENDS',
+    hardwareHealth: 'SYSTEM HEALTH',
+    totalFlips: 'TOTAL FLIPS',
+    timeSaved: 'TIME SAVED',
+    moistureTarget: 'MOISTURE GOAL'
   },
   tl: {
     welcome: 'Maligayang pagdating sa BUWAD',
@@ -211,7 +221,17 @@ const translations = {
     rainDetectedLabel: 'MAY ULAN',
     noRainDetectedLabel: 'WALANG ULAN',
     buwadTurnedOff: 'NAKA-OFF ANG BUWAD',
-    coverIsOn: 'NAKASARA ANG TAKIP'
+    coverIsOn: 'NAKASARA ANG TAKIP',
+    analytics: 'ANALITIKA',
+    batchSummary: 'BUOD NG BATCH',
+    exportCsv: 'I-EXPORT ANG DATA',
+    dryingEfficiency: 'EPISYENSYA SA ARAW',
+    thermalGain: 'PAGPAPANATILI NG INIT',
+    sensorTrends: 'MGA TREND NG SENSOR',
+    hardwareHealth: 'KALUSUGAN NG SISTEMA',
+    totalFlips: 'KABUUANG BALIKTAD',
+    timeSaved: 'NATIPID NA ORAS',
+    moistureTarget: 'TARGET NA TUYO'
   },
   ceb: {
     welcome: 'Maayong pag-abot sa BUWAD',
@@ -316,7 +336,17 @@ const translations = {
     rainDetectedLabel: 'MAY ULAN',
     noRainDetectedLabel: 'WALAY ULAN',
     buwadTurnedOff: 'NAKA-OFF ANG BUWAD',
-    coverIsOn: 'SIRADO ANG TABON'
+    coverIsOn: 'SIRADO ANG TABON',
+    analytics: 'ANALITIKA',
+    batchSummary: 'SUMARYO SA BATCH',
+    exportCsv: 'I-EXPORT ANG DATA',
+    dryingEfficiency: 'KAEPEKTIBO SA ARAW',
+    thermalGain: 'PAGPUGONG SA KAINIT',
+    sensorTrends: 'MGA TREND SA SENSOR',
+    hardwareHealth: 'KALIG-ON SA SISTEMA',
+    totalFlips: 'KABUUANG BALI',
+    timeSaved: 'NATIPID NGA ORAS',
+    moistureTarget: 'TARGET NGA UGA'
   }
 };
 

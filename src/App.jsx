@@ -5,6 +5,7 @@ import { initializeApp } from 'firebase/app';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import Dashboard from './views/Dashboard';
 import Controls from './views/Controls';
+import Analytics from './views/Analytics';
 import Alerts from './views/Alerts';
 import Logs from './views/Logs';
 import { 
@@ -60,6 +61,10 @@ function AppContent() {
   const [sensorData, setSensorData] = useState(null);
   const [systemState, setSystemState] = useState({
     phase: 'offline', nextFlip: 0, timerInterval: 15, danggitTimer: 15, bolinaoTimer: 10,
+    batchStartTime: (() => {
+      const saved = localStorage.getItem('buwad_batch_start');
+      return saved ? parseInt(saved, 10) : Date.now();
+    })(),
     isPaused: false, manualOverride: false, dryingMode: 'danggit', flipMode: 'timer',
     coverClosed: false
   });
@@ -122,6 +127,7 @@ function AppContent() {
     try {
       await push(ref(database, 'logs'), {
         id: localId,
+        createdAt: logEntry.createdAt || Date.now(),
         timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }),
         action: logEntry.action,
         details: logEntry.details,
@@ -138,19 +144,36 @@ function AppContent() {
   const addLogEntry = useCallback((logEntry) => {
     const now = new Date();
     const timeString = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+    const createdAt = Date.now();
+    const uniqueId = `${createdAt}_${Math.random().toString(36).substring(2, 9)}`;
     localLogIdsRef.current.add(uniqueId);
     setActivityLogs(prev => {
-      const updated = [{ id: uniqueId, timestamp: timeString, formattedTime: formatToStandardTime(timeString), action: logEntry.action, details: logEntry.details, sensorValues: logEntry.sensorValues || null, isLocal: true }, ...prev];
+      const updated = [{ id: uniqueId, createdAt, timestamp: timeString, formattedTime: formatToStandardTime(timeString), action: logEntry.action, details: logEntry.details, sensorValues: logEntry.sensorValues || null, isLocal: true }, ...prev];
       return updated.slice(0, MAX_LOCAL_LOGS);
     });
-    syncLogToFirebase(logEntry, uniqueId);
+    syncLogToFirebase({ ...logEntry, createdAt }, uniqueId);
   }, [formatToStandardTime, syncLogToFirebase]);
 
   const handleSystemPowerToggle = useCallback((newState) => {
     setIsSystemPoweredOn(newState);
-    writeToSystem({ powerOn: newState });
+    const updates = { powerOn: newState };
+    if (newState) {
+      const now = Date.now();
+      localStorage.setItem('buwad_batch_start', now.toString());
+      setSystemState(prev => ({ ...prev, batchStartTime: now }));
+      updates.batchStartTime = now;
+    }
+    writeToSystem(updates);
   }, [writeToSystem]);
+
+  const handleResetBatch = useCallback(() => {
+    const now = Date.now();
+    localStorage.setItem('buwad_batch_start', now.toString());
+    setSystemState(prev => ({ ...prev, batchStartTime: now, batchFlipCount: 0 }));
+    writeToSystem({ batchStartTime: now, batchFlipCount: 0, batchReset: true });
+    addLogEntry({ action: 'NEW BATCH STARTED', details: `Started fresh ${systemState.dryingMode} drying cycle` });
+    showToast('New drying batch started!');
+  }, [systemState.dryingMode, writeToSystem, addLogEntry, showToast]);
 
   const handleManualOverride = useCallback(() => {
     setSystemState(prev => ({ ...prev, manualOverride: true }));
@@ -166,6 +189,9 @@ function AppContent() {
   }, [systemState.coverClosed, addLogEntry, writeToSystem]);
   
   const handleDryingModeToggle = useCallback((mode) => {
+    const now = Date.now();
+    localStorage.setItem('buwad_batch_start', now.toString());
+
     setSystemState(prev => {
       if (prev.dryingMode === mode) return prev;
       const activeTimer = mode === 'danggit' ? (prev.danggitTimer || 15) : (prev.bolinaoTimer || 10);
@@ -173,20 +199,28 @@ function AppContent() {
         ...prev, 
         dryingMode: mode, 
         timerInterval: activeTimer,
-        nextFlip: activeTimer 
+        nextFlip: activeTimer,
+        batchStartTime: now,
+        batchFlipCount: 0
       };
     });
+
     const isDanggit = mode === 'danggit';
     const activeTimer = isDanggit ? (systemState.danggitTimer || 15) : (systemState.bolinaoTimer || 10);
+    
     addLogEntry({ 
-      action: 'DRYING MODE CHANGED', 
-      details: `Switched to ${mode} (Timer: ${activeTimer}s)`, 
+      action: 'NEW BATCH STARTED', 
+      details: `Switched profile to ${mode === 'danggit' ? 'Danggit' : 'Bolinao'} · Fresh drying batch initialized`, 
       sensorValues: { profile: mode, cycleInterval: `${activeTimer}s` } 
     });
+
     writeToSystem({ 
       dryingMode: mode, 
       timerInterval: activeTimer,
-      nextFlip: activeTimer 
+      nextFlip: activeTimer,
+      batchStartTime: now,
+      batchFlipCount: 0,
+      batchReset: true
     });
   }, [systemState.danggitTimer, systemState.bolinaoTimer, addLogEntry, writeToSystem]);
 
@@ -333,12 +367,16 @@ function AppContent() {
         const bTimer = data.bolinaoTimer !== undefined ? data.bolinaoTimer : (prev.bolinaoTimer || 10);
         const curMode = data.dryingMode || prev.dryingMode || 'danggit';
         const curTimer = data.timerInterval !== undefined ? data.timerInterval : (curMode === 'danggit' ? dTimer : bTimer);
+        const bStart = data.batchStartTime !== undefined ? data.batchStartTime : (prev.batchStartTime || Date.now());
+        if (data.batchStartTime) localStorage.setItem('buwad_batch_start', data.batchStartTime.toString());
         return {
           phase: data.phase || prev.phase,
           nextFlip: data.nextFlip !== undefined ? data.nextFlip : prev.nextFlip,
           timerInterval: curTimer,
           danggitTimer: dTimer,
           bolinaoTimer: bTimer,
+          batchStartTime: bStart,
+          batchFlipCount: data.batchFlipCount !== undefined ? data.batchFlipCount : (prev.batchFlipCount || 0),
           isPaused: data.isPaused !== undefined ? data.isPaused : prev.isPaused,
           manualOverride: prev.manualOverride,
           dryingMode: curMode,
@@ -353,21 +391,26 @@ function AppContent() {
     });
     const unsubLogs = onValue(query(ref(database, 'logs'), orderByKey(), limitToLast(50)), (snapshot) => {
       const data = snapshot.val();
-      if (data && !logsLoadedRef.current) {
-        const fbLogs = Object.values(data).filter(l => l?.action && !localLogIdsRef.current.has(l.id))
-          .map(l => ({ id: l.id || `${Date.now()}`, timestamp: l.timestamp || '--:--', formattedTime: formatToStandardTime(l.timestamp), action: l.action, details: l.details || '', sensorValues: l.sensorValues || null, isLocal: false }))
-          .reverse().slice(0, MAX_LOCAL_LOGS);
-        if (fbLogs.length) {
-          setActivityLogs(prev => {
-            const ids = new Set(prev.map(l => l.id));
-            const merged = [...fbLogs.filter(l => !ids.has(l.id)), ...prev];
-            merged.sort((a, b) => (b.timestamp || '00:00').localeCompare(a.timestamp || '00:00'));
-            return merged.slice(0, MAX_LOCAL_LOGS);
-          });
-        }
-        logsLoadedRef.current = true;
+      if (data) {
+        const fbLogs = Object.entries(data).map(([key, val]) => ({ 
+          id: val.id || key, 
+          createdAt: val.createdAt || (val.id && !isNaN(parseInt(val.id.split('_')[0], 10)) ? parseInt(val.id.split('_')[0], 10) : Date.now()),
+          timestamp: val.timestamp || '--:--', 
+          formattedTime: formatToStandardTime(val.timestamp), 
+          action: val.action, 
+          details: val.details || '', 
+          sensorValues: val.sensorValues || null, 
+          isLocal: false 
+        })).filter(l => Boolean(l.action)).reverse();
+
+        setActivityLogs(prev => {
+          const prevLocal = prev.filter(l => l.isLocal);
+          const ids = new Set(fbLogs.map(l => l.id));
+          const uniqueLocals = prevLocal.filter(l => !ids.has(l.id));
+          return [...uniqueLocals, ...fbLogs].slice(0, MAX_LOCAL_LOGS);
+        });
       }
-    }, { onlyOnce: false });
+    });
     return () => { unsubSensors(); unsubSystem(); unsubAlerts(); unsubLogs(); };
   }, [formatToStandardTime]);
 
@@ -388,6 +431,7 @@ function AppContent() {
   const navItems = [
     { id: 'dashboard', label: t('dashboard'), icon: '▦' },
     { id: 'controls', label: t('controls'), icon: '◷' },
+    { id: 'analytics', label: t('analytics') || 'ANALYTICS', icon: '▥' },
     { id: 'alerts', label: t('alerts'), icon: '◬' },
     { id: 'logs', label: t('logs'), icon: '☰' }
   ];
@@ -501,6 +545,18 @@ function AppContent() {
                   onManualOverride={handleManualOverride} 
                   onCoverToggle={handleCoverToggle} 
                   isDeviceOnline={isDeviceOnline}
+                  t={t} 
+                />
+              )}
+              {activeTab === 'analytics' && (
+                <Analytics 
+                  sensorData={sensorData} 
+                  systemState={systemState} 
+                  activityLogs={activityLogs} 
+                  isDeviceOnline={isDeviceOnline} 
+                  isSystemOn={isSystemPoweredOn}
+                  batchStartTime={systemState.batchStartTime}
+                  onResetBatch={handleResetBatch}
                   t={t} 
                 />
               )}

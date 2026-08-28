@@ -36,20 +36,27 @@ const Controls = ({
   const [showTimerModal, setShowTimerModal] = useState(false);
   const initialHours = Math.floor(currentTimerInterval / 3600);
   const initialMinutes = Math.floor((currentTimerInterval % 3600) / 60);
+  const initialSeconds = currentTimerInterval % 60;
 
   const [selectedHours, setSelectedHours] = useState(initialHours);
-  const [selectedMinutes, setSelectedMinutes] = useState(initialMinutes || (currentTimerInterval < 60 ? 1 : 0));
+  const [selectedMinutes, setSelectedMinutes] = useState(initialMinutes);
+  const [selectedSeconds, setSelectedSeconds] = useState(initialSeconds);
+
   const [modalHours, setModalHours] = useState(initialHours);
-  const [modalMinutes, setModalMinutes] = useState(initialMinutes || (currentTimerInterval < 60 ? 1 : 0));
+  const [modalMinutes, setModalMinutes] = useState(initialMinutes);
+  const [modalSeconds, setModalSeconds] = useState(initialSeconds);
 
   useEffect(() => {
     const targetTimer = isDanggit ? (danggitTimer || 15) : (bolinaoTimer || 10);
     const hrs = Math.floor(targetTimer / 3600);
     const mins = Math.floor((targetTimer % 3600) / 60);
+    const secs = targetTimer % 60;
     setSelectedHours(hrs);
-    setSelectedMinutes(mins || (targetTimer < 60 ? 1 : 0));
+    setSelectedMinutes(mins);
+    setSelectedSeconds(secs);
     setModalHours(hrs);
-    setModalMinutes(mins || (targetTimer < 60 ? 1 : 0));
+    setModalMinutes(mins);
+    setModalSeconds(secs);
   }, [currentDryingMode, danggitTimer, bolinaoTimer, isDanggit]);
 
   useEffect(() => {
@@ -94,24 +101,32 @@ const Controls = ({
     }
     setModalHours(selectedHours);
     setModalMinutes(selectedMinutes);
+    setModalSeconds(selectedSeconds);
     setShowTimerModal(true);
-  }, [isOnline, selectedHours, selectedMinutes, triggerToast]);
+  }, [isOnline, selectedHours, selectedMinutes, selectedSeconds, triggerToast]);
 
   const handleApplyModalTimer = useCallback(() => {
     if (!isOnline) {
       triggerToast('Cannot change timer — ESP32 is offline');
       return;
     }
-    let totalSeconds = (modalHours * 3600) + (modalMinutes * 60);
+    let totalSeconds = (modalHours * 3600) + (modalMinutes * 60) + modalSeconds;
     if (totalSeconds < 5) totalSeconds = 5; // Minimum 5s
     setSelectedHours(modalHours);
     setSelectedMinutes(modalMinutes);
+    setSelectedSeconds(modalSeconds);
     onTimerIntervalChange?.(totalSeconds, currentDryingMode);
     setShowTimerModal(false);
-    const label = modalHours > 0 ? (modalMinutes > 0 ? `${modalHours}h ${modalMinutes}m` : `${modalHours}h`) : (modalMinutes > 0 ? `${modalMinutes}m` : `${totalSeconds}s`);
+    
+    let label = '';
+    if (modalHours > 0) label += `${modalHours}h `;
+    if (modalMinutes > 0) label += `${modalMinutes}m `;
+    if (modalSeconds > 0 || label === '') label += `${modalSeconds}s`;
+    label = label.trim();
+
     const profileName = isDanggit ? 'Danggit' : 'Bolinao';
-    triggerToast(`${profileName} timer saved: ${label}`);
-  }, [isOnline, modalHours, modalMinutes, onTimerIntervalChange, currentDryingMode, isDanggit, triggerToast]);
+    triggerToast(`${profileName} timer set to ${label}`);
+  }, [isOnline, modalHours, modalMinutes, modalSeconds, onTimerIntervalChange, currentDryingMode, isDanggit, triggerToast]);
 
   const handleManualFlip = useCallback(() => {
     if (!isOnline) {
@@ -137,21 +152,24 @@ const Controls = ({
 
   const hoursOptions = Array.from({ length: 13 }, (_, i) => i); // 0 to 12 hours
   const minutesOptions = Array.from({ length: 60 }, (_, i) => i); // 0 to 59 minutes
+  const secondsOptions = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]; // 0 to 55s
 
   const presets = [
-    { label: '15m', hrs: 0, mins: 15 },
-    { label: '30m', hrs: 0, mins: 30 },
-    { label: '1h', hrs: 1, mins: 0 },
-    { label: '2h', hrs: 2, mins: 0 },
-    { label: '4h', hrs: 4, mins: 0 },
-    { label: '6h', hrs: 6, mins: 0 }
+    { label: '10s', hrs: 0, mins: 0, secs: 10 },
+    { label: '15s', hrs: 0, mins: 0, secs: 15 },
+    { label: '30s', hrs: 0, mins: 0, secs: 30 },
+    { label: '1m', hrs: 0, mins: 1, secs: 0 },
+    { label: '15m', hrs: 0, mins: 15, secs: 0 },
+    { label: '30m', hrs: 0, mins: 30, secs: 0 },
+    { label: '1h', hrs: 1, mins: 0, secs: 0 }
   ];
 
-  const currentDurationLabel = (hrs = selectedHours, mins = selectedMinutes) => {
-    if (hrs === 0 && mins === 0) return '1 minute';
-    if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
-    if (hrs > 0) return `${hrs} ${hrs === 1 ? 'hour' : 'hours'}`;
-    return `${mins} minutes`;
+  const currentDurationLabel = (hrs = modalHours, mins = modalMinutes, secs = modalSeconds) => {
+    let parts = [];
+    if (hrs > 0) parts.push(`${hrs} ${hrs === 1 ? 'hr' : 'hrs'}`);
+    if (mins > 0) parts.push(`${mins} ${mins === 1 ? 'min' : 'mins'}`);
+    if (secs > 0 || parts.length === 0) parts.push(`${secs || 15}s`);
+    return parts.join(' ');
   };
 
   const toastPortal = createPortal(
@@ -206,20 +224,20 @@ const Controls = ({
             <div className="text-center py-2 bg-[#00386D]/5 dark:bg-[#6699CC]/10 rounded-2xl border border-[#00386D]/10 dark:border-white/5">
               <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">SELECTED DURATION</div>
               <div className="text-xl font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
-                {currentDurationLabel(modalHours, modalMinutes)}
+                {currentDurationLabel(modalHours, modalMinutes, modalSeconds)}
               </div>
             </div>
             <div>
               <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5 px-1">QUICK PRESETS</div>
-              <div className="grid grid-cols-6 gap-1">
+              <div className="grid grid-cols-7 gap-1">
                 {presets.map((p) => {
-                  const isSelected = modalHours === p.hrs && modalMinutes === p.mins;
+                  const isSelected = modalHours === p.hrs && modalMinutes === p.mins && modalSeconds === p.secs;
                   return (
                     <button
                       key={p.label}
                       type="button"
-                      onClick={() => { setModalHours(p.hrs); setModalMinutes(p.mins); }}
-                      className={`py-1.5 rounded-xl text-[11px] font-black transition-colors ${
+                      onClick={() => { setModalHours(p.hrs); setModalMinutes(p.mins); setModalSeconds(p.secs); }}
+                      className={`py-1.5 rounded-xl text-[10px] font-black transition-colors ${
                         isSelected
                           ? 'bg-[#00386D] dark:bg-[#6699CC] text-white shadow-sm'
                           : 'bg-gray-100 dark:bg-white/5 text-[#00386D] dark:text-[#94A3B8] hover:bg-gray-200 dark:hover:bg-white/10'
@@ -231,7 +249,7 @@ const Controls = ({
                 })}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 bg-gray-50 dark:bg-[#121620] p-3 rounded-2xl border border-gray-200 dark:border-white/5">
+            <div className="grid grid-cols-3 gap-2 bg-gray-50 dark:bg-[#121620] p-3 rounded-2xl border border-gray-200 dark:border-white/5">
               <div>
                 <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">HOURS</div>
                 <div className="h-32 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
@@ -255,7 +273,7 @@ const Controls = ({
                 </div>
               </div>
               <div>
-                <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">MINUTES</div>
+                <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">MINS</div>
                 <div className="h-32 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
                   {minutesOptions.map((m) => {
                     const active = modalMinutes === m;
@@ -270,7 +288,29 @@ const Controls = ({
                             : 'text-[#00386D] dark:text-[#94A3B8] hover:bg-white dark:hover:bg-white/5'
                         }`}
                       >
-                        {m} {m === 1 ? 'min' : 'mins'}
+                        {m}m
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">SECS</div>
+                <div className="h-32 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
+                  {secondsOptions.map((s) => {
+                    const active = modalSeconds === s;
+                    return (
+                      <button
+                        key={`modal-sec-${s}`}
+                        type="button"
+                        onClick={() => setModalSeconds(s)}
+                        className={`w-full py-1.5 rounded-xl text-center font-black text-xs transition-all ${
+                          active
+                            ? 'bg-[#00386D] dark:bg-[#6699CC] text-white shadow-sm'
+                            : 'text-[#00386D] dark:text-[#94A3B8] hover:bg-white dark:hover:bg-white/5'
+                        }`}
+                      >
+                        {s}s
                       </button>
                     );
                   })}

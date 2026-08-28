@@ -1,3 +1,7 @@
+#include <Arduino.h>
+#include <stdio.h>
+#include <string.h>
+#include <math.h>
 #include "secrets.h"
 #include <DHT.h>
 #include <ESP32Servo.h>
@@ -55,6 +59,7 @@ String dryingMode = "danggit";
 String flipMode = "timer";
 int danggitTimer = 15; // In seconds (default: 15s)
 int bolinaoTimer = 10; // In seconds (default: 10s)
+int batchFlipCount = 0;
 bool powerOn = true;
 bool isPaused = false;
 bool flipState = false;
@@ -359,6 +364,8 @@ void checkSettings() {
       if (json.get(jsonData, "bolinaoTimer") && jsonData.success &&
           jsonData.intValue >= 5)
         bolinaoTimer = jsonData.intValue;
+      if (json.get(jsonData, "batchFlipCount") && jsonData.success)
+        batchFlipCount = jsonData.intValue;
       if (json.get(jsonData, "coverClosed") && jsonData.success)
         coverClosed = jsonData.boolValue;
 
@@ -468,6 +475,14 @@ void checkSettings() {
       }
     }
 
+    if (json.get(jsonData, "batchReset") && jsonData.success &&
+        jsonData.boolValue) {
+      batchFlipCount = 0;
+      Firebase.RTDB.setBool(&fbdo, "system/batchReset", false);
+      Serial.println("🔄 Batch flip counter reset to 0");
+      publishSystemState();
+    }
+
     if (json.get(jsonData, "manualFlip") && jsonData.success &&
         jsonData.boolValue) {
       Serial.println(">>> MANUAL FLIP REQUESTED! <<<");
@@ -562,10 +577,10 @@ void connectFirebase() {
   printLCDLine(0, "Connecting Cloud");
   printLCDLine(1, "Firebase RTDB...");
 
-  config.api_key = API_KEY;
-  config.database_url = DATABASE_URL;
-  auth.user.email = USER_EMAIL;
-  auth.user.password = USER_PASSWORD;
+  config.api_key = String(API_KEY);
+  config.database_url = String(DATABASE_URL);
+  auth.user.email = String(USER_EMAIL);
+  auth.user.password = String(USER_PASSWORD);
   config.token_status_callback = tokenStatusCallback;
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
@@ -698,7 +713,7 @@ void handleWiFiReconnect() {
     if (WiFi.status() != WL_CONNECTED) {
       // Increase backoff (exponential, capped)
       wifiReconnectDelay =
-          min(wifiReconnectDelay * 2, (unsigned long)WIFI_RECONNECT_MAX_DELAY);
+          _min((unsigned long)(wifiReconnectDelay * 2), (unsigned long)WIFI_RECONNECT_MAX_DELAY);
       Serial.println("   WiFi still offline. Next attempt in " +
                      String(wifiReconnectDelay / 1000) + "s");
     }
@@ -752,6 +767,7 @@ void publishSystemState() {
   json.set("timerInterval", (int)activeSeconds);
   json.set("danggitTimer", danggitTimer);
   json.set("bolinaoTimer", bolinaoTimer);
+  json.set("batchFlipCount", batchFlipCount);
   json.set("isPaused", isPaused);
   json.set("coverClosed", coverClosed);
   json.set("sensorFault", sensorFault);
@@ -806,6 +822,7 @@ void executeFlip() {
   }
 
   lastFlip = millis();
+  batchFlipCount++;
   addLog("FLIP_EXECUTED", "Position: " + String(targetAngle) + "°");
   publishSystemState();
 }
