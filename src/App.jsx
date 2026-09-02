@@ -17,6 +17,8 @@ import {
   areNotificationsEnabled,
   getBrowserUnsupportedMessage
 } from './utils/notifications';
+import { soundService } from './services/soundService';
+import { getTimestampFromPushId } from './utils/firebaseHelpers';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -51,6 +53,10 @@ function AppContent() {
   const [notificationMessage, setNotificationMessage] = useState(null);
   const [fcmToken, setFcmToken] = useState(null);
   const [messagingInstance, setMessagingInstance] = useState(null);
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    return localStorage.getItem('buwad_sound') !== 'false';
+  });
+  const [isSettingUpBatch, setIsSettingUpBatch] = useState(false);
   const { t, language, selectLanguage, resetLanguage } = useLanguage();
 
   const languages = [
@@ -81,6 +87,36 @@ function AppContent() {
   const triggersCleanupRef = useRef(null);
   const logsLoadedRef = useRef(false);
   const ignoreNextSystemUpdateRef = useRef(false);
+  const prevRainRef = useRef(false);
+  const prevFlipsRef = useRef(null);
+
+  const handleToggleSound = useCallback(() => {
+    setSoundEnabled(prev => {
+      const next = !prev;
+      localStorage.setItem('buwad_sound', next.toString());
+      soundService.setEnabled(next);
+      if (next) soundService.playFlipTone();
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    // Sound effect: Urgent Rain Alarm
+    if (sensorData?.rainDetected && !prevRainRef.current) {
+      soundService.playRainAlarm();
+      soundService.speakAlert('Warning: Rain detected. Protective canopy is closing.');
+    }
+    prevRainRef.current = !!sensorData?.rainDetected;
+  }, [sensorData?.rainDetected]);
+
+  useEffect(() => {
+    // Sound effect: Flip Notification
+    const currentFlips = systemState?.batchFlipCount;
+    if (prevFlipsRef.current !== null && currentFlips !== undefined && currentFlips > prevFlipsRef.current) {
+      soundService.playFlipTone();
+    }
+    prevFlipsRef.current = currentFlips;
+  }, [systemState?.batchFlipCount]);
 
   const formatToStandardTime = useCallback((timestamp) => {
     if (!timestamp) return '--:-- --';
@@ -116,9 +152,7 @@ function AppContent() {
   const writeToSystem = useCallback(async (updates) => {
     if (!database) return;
     try {
-      ignoreNextSystemUpdateRef.current = true;
       await update(ref(database, 'system'), updates);
-      setTimeout(() => { ignoreNextSystemUpdateRef.current = false; }, 1500);
     } catch (error) { console.error('System write failed:', error); }
   }, []);
 
@@ -166,27 +200,102 @@ function AppContent() {
     writeToSystem(updates);
   }, [writeToSystem]);
 
-  const handleResetBatch = useCallback(() => {
+  const handleGoToControls = useCallback(() => {
+    setIsSettingUpBatch(true);
+    setActiveTab('controls');
+  }, []);
+
+  const handleStartBatch = useCallback((config = {}) => {
     const now = Date.now();
     localStorage.setItem('buwad_batch_start', now.toString());
-    setSystemState(prev => ({ ...prev, batchStartTime: now, batchFlipCount: 0 }));
-    writeToSystem({ batchStartTime: now, batchFlipCount: 0, batchReset: true });
-    addLogEntry({ action: 'NEW BATCH STARTED', details: `Started fresh ${systemState.dryingMode} drying cycle` });
-    showToast('New drying batch started!');
-  }, [systemState.dryingMode, writeToSystem, addLogEntry, showToast]);
+
+    // Auto-archive previous batch if it had activity
+    try {
+      const priorSaved = localStorage.getItem('buwad_batch_history');
+      const parsed = priorSaved ? JSON.parse(priorSaved) : [];
+      const runNum = String(parsed.length + 1).padStart(2, '0');
+      const priorBatch = {
+        id: `BATCH-#${runNum}`,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        species: systemState.dryingMode === 'danggit' ? 'Danggit' : 'Bolinao',
+        duration: 'Completed Run',
+        flips: systemState.batchFlipCount || 0,
+        rainSafes: 0,
+        avgTemp: sensorData?.temperature ? `${sensorData.temperature.toFixed(1)}°C` : '--',
+        avgHum: sensorData?.humidity ? `${sensorData.humidity}%` : '--',
+        status: 'COMPLETED (18% MC)',
+        isLive: false,
+        savedAt: now
+      };
+      if ((systemState.batchFlipCount || 0) > 0) {
+        const updated = [priorBatch, ...parsed.filter(b => b.id !== priorBatch.id)];
+        localStorage.setItem('buwad_batch_history', JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.warn('Auto-archive error:', e);
+    }
+
+    const newDryingMode = config.dryingMode || systemState.dryingMode;
+    const newFlipMode = config.flipMode || systemState.flipMode;
+    const newInterval = config.timerInterval || systemState.timerInterval;
+
+    const updates = {
+      dryingMode: newDryingMode,
+      flipMode: newFlipMode,
+      timerInterval: newInterval,
+      danggitTimer: newDryingMode === 'danggit' ? newInterval : 15,
+      bolinaoTimer: newDryingMode === 'bolinao' ? newInterval : 10,
+      batchStartTime: now,
+      batchFlipCount: 0,
+      batchReset: true,
+      powerOn: true
+    };
+
+    setSystemState(prev => ({
+      ...prev,
+      ...updates
+    }));
+
+    writeToSystem(updates);
+
+    addLogEntry({
+      action: 'NEW BATCH STARTED',
+      details: `Started ${newDryingMode.toUpperCase()} batch · Mode: ${newFlipMode.toUpperCase()}`
+    });
+
+    soundService.playSuccessFanfare();
+    soundService.speakAlert(`Batch started for ${newDryingMode}. Navigating to analytics.`);
+    showToast(`Batch started for ${newDryingMode.toUpperCase()}!`);
+
+    setIsSettingUpBatch(false);
+    // DIRECT REDIRECTION TO ANALYTICS TO SEE DATA!
+    setActiveTab('analytics');
+  }, [systemState, sensorData, writeToSystem, addLogEntry, showToast]);
 
   const handleManualOverride = useCallback(() => {
-    setSystemState(prev => ({ ...prev, manualOverride: true }));
-    addLogEntry({ action: 'FLIP NOW', details: 'Manual flip triggered' });
+    setSystemState(prev => ({ 
+      ...prev, 
+      manualOverride: true,
+      batchFlipCount: (prev.batchFlipCount || 0) + 1 
+    }));
+    addLogEntry({ action: 'MANUAL_OVERRIDE_SENT', details: 'Manual flip triggered from controls' });
     writeToSystem({ manualFlip: true, lcdMessage: "Manual Flip|FLIPPING NOW..." });
     setTimeout(() => { setSystemState(prev => ({ ...prev, manualOverride: false })); }, 3000);
   }, [addLogEntry, writeToSystem]);
 
   const handleCoverToggle = useCallback(() => {
     const isCurrentlyClosed = systemState.coverClosed;
-    addLogEntry({ action: 'COVER NOW', details: isCurrentlyClosed ? 'Opening cover' : 'Closing cover' });
+    const nextCoverState = !isCurrentlyClosed;
+    setSystemState(prev => ({ ...prev, coverClosed: nextCoverState }));
+    addLogEntry({ action: 'CANOPY_TOGGLE_SENT', details: nextCoverState ? 'Closing canopy' : 'Opening canopy' });
     writeToSystem({ manualCover: true });
   }, [systemState.coverClosed, addLogEntry, writeToSystem]);
+
+  const handleRunDiagnostics = useCallback(() => {
+    writeToSystem({ diagnosticTrigger: true, lcdMessage: "SELF-TEST|DIAGNOSTICS..." });
+    addLogEntry({ action: 'HARDWARE_SELF_TEST', details: 'Automated 5-step hardware diagnostic sequence initiated' });
+    showToast('Executing 5-step hardware self-test...');
+  }, [writeToSystem, addLogEntry, showToast]);
   
   const handleDryingModeToggle = useCallback((mode) => {
     const now = Date.now();
@@ -358,7 +467,6 @@ function AppContent() {
       }
     });
     const unsubSystem = onValue(ref(database, 'system'), (snapshot) => {
-      if (ignoreNextSystemUpdateRef.current) return;
       const data = snapshot.val();
       if (!data) return;
       if (data.powerOn !== undefined) setIsSystemPoweredOn(data.powerOn);
@@ -387,21 +495,47 @@ function AppContent() {
     });
     const unsubAlerts = onValue(ref(database, 'alerts'), (snapshot) => {
       const data = snapshot.val();
-      if (data) setAlerts(Object.values(data).slice(-15).reverse());
+      if (data) {
+        const validAlerts = Object.entries(data)
+          .map(([key, val]) => {
+            const raw = typeof val === 'object' && val !== null ? val : { message: String(val) };
+            const msg = raw.message || raw.details || raw.action || raw.text || raw.title || raw.msg;
+            return {
+              id: raw.id || key,
+              ...raw,
+              message: msg ? String(msg).trim() : ''
+            };
+          })
+          .filter(a => Boolean(a.message && a.message.length > 0))
+          .slice(-15)
+          .reverse();
+        setAlerts(validAlerts);
+      } else {
+        setAlerts([]);
+      }
     });
     const unsubLogs = onValue(query(ref(database, 'logs'), orderByKey(), limitToLast(50)), (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const fbLogs = Object.entries(data).map(([key, val]) => ({ 
-          id: val.id || key, 
-          createdAt: val.createdAt || (val.id && !isNaN(parseInt(val.id.split('_')[0], 10)) ? parseInt(val.id.split('_')[0], 10) : Date.now()),
-          timestamp: val.timestamp || '--:--', 
-          formattedTime: formatToStandardTime(val.timestamp), 
-          action: val.action, 
-          details: val.details || '', 
-          sensorValues: val.sensorValues || null, 
-          isLocal: false 
-        })).filter(l => Boolean(l.action)).reverse();
+        const fbLogs = Object.entries(data).map(([key, val]) => {
+          let logTime = val.createdAt;
+          if (!logTime) {
+            const pushTime = getTimestampFromPushId(key);
+            if (pushTime > 0) logTime = pushTime;
+            else if (val.id && !isNaN(parseInt(val.id.split('_')[0], 10))) logTime = parseInt(val.id.split('_')[0], 10);
+            else logTime = Date.now();
+          }
+          return { 
+            id: val.id || key, 
+            createdAt: logTime, 
+            timestamp: val.timestamp || '--:--', 
+            formattedTime: formatToStandardTime(val.timestamp), 
+            action: val.action, 
+            details: val.details || '', 
+            sensorValues: val.sensorValues || null, 
+            isLocal: false 
+          };
+        }).filter(l => Boolean(l.action)).reverse();
 
         setActivityLogs(prev => {
           const prevLocal = prev.filter(l => l.isLocal);
@@ -453,6 +587,26 @@ function AppContent() {
               />
             </div>
             <div className="flex items-center gap-1.5">
+              {/* Option B: Smart Sound Alarm Toggle */}
+              <motion.button
+                type="button"
+                onClick={handleToggleSound}
+                whileTap={{ scale: 0.95 }}
+                title={soundEnabled ? 'Mute Audio Alerts' : 'Unmute Audio Alerts'}
+                className="p-2 rounded-xl text-[#00386D] dark:text-[#94A3B8] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              >
+                {soundEnabled ? (
+                  <svg className="w-5 h-5 text-[#00386D] dark:text-[#6699CC]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                  </svg>
+                )}
+              </motion.button>
+
               {notificationsSupported && (
                 <motion.button onClick={handleToggleNotifications} whileTap={{ scale: 0.95 }} className={`p-2 rounded-xl ${notificationsEnabled ? 'text-green-500' : 'text-red-500'}`}>
                   {notificationsEnabled ? (
@@ -526,6 +680,7 @@ function AppContent() {
                   formatCountdown={formatCountdown} 
                   t={t} 
                   onSystemToggle={handleSystemPowerToggle} 
+                  onGoToControls={handleGoToControls}
                   isSystemOn={isSystemPoweredOn}
                   isDeviceOnline={isDeviceOnline}
                   connectionStatus={connectionStatus}
@@ -544,6 +699,10 @@ function AppContent() {
                   onTimerIntervalChange={handleTimerIntervalChange}
                   onManualOverride={handleManualOverride} 
                   onCoverToggle={handleCoverToggle} 
+                  onRunDiagnostics={handleRunDiagnostics}
+                  onStartBatch={handleStartBatch}
+                  isSettingUpBatch={isSettingUpBatch}
+                  onEnterSetup={() => setIsSettingUpBatch(true)}
                   isDeviceOnline={isDeviceOnline}
                   t={t} 
                 />
@@ -556,7 +715,8 @@ function AppContent() {
                   isDeviceOnline={isDeviceOnline} 
                   isSystemOn={isSystemPoweredOn}
                   batchStartTime={systemState.batchStartTime}
-                  onResetBatch={handleResetBatch}
+                  onResetBatch={handleGoToControls}
+                  onGoToControls={handleGoToControls}
                   t={t} 
                 />
               )}

@@ -32,10 +32,15 @@ const Alerts = ({ alerts, rainDetected, dismissedIds, onDismiss, onDismissAll, t
     
     if (alerts && alerts.length > 0) {
       alerts.forEach((a, i) => {
+        const msg = a.message || a.details || a.action || a.text || a.title || a.msg;
+        if (!msg || typeof msg !== 'string' || msg.trim().length === 0) {
+          return; // Skip empty alerts that have no data
+        }
         const stableId = a.id || `fb-alert-${i}`;
         result.push({
           ...a,
           id: stableId,
+          message: msg.trim(),
           formattedTime: a.formattedTime || formatToStandardTime(a.timestamp)
         });
       });
@@ -46,7 +51,7 @@ const Alerts = ({ alerts, rainDetected, dismissedIds, onDismiss, onDismissAll, t
 
   const criticalAlerts = useMemo(() => {
     const dismissList = dismissedIds || [];
-    return allAlerts.filter(a => !dismissList.includes(a.id)).slice(0, 15);
+    return allAlerts.filter(a => !dismissList.includes(a.id) && Boolean(a.message && a.message.trim().length > 0)).slice(0, 15);
   }, [allAlerts, dismissedIds]);
 
   const getPriorityColor = (priority) => {

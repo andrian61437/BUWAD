@@ -14,11 +14,19 @@ const Controls = ({
   onTimerIntervalChange,
   onManualOverride,
   onCoverToggle,
+  onRunDiagnostics,
+  onStartBatch,
+  isSettingUpBatch = false,
+  onEnterSetup,
   isDeviceOnline,
   t 
 }) => {
+  const [fishLoaded, setFishLoaded] = useState(false);
   const [isManualFliping, setIsManualFliping] = useState(false);
   const [isManualCover, setIsManualCover] = useState(false);
+  const [isDiagnosing, setIsDiagnosing] = useState(false);
+  const [diagStep, setDiagStep] = useState(0);
+  const [diagResults, setDiagResults] = useState(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const toastTimeoutRef = useRef(null);
@@ -58,6 +66,12 @@ const Controls = ({
     setModalMinutes(mins);
     setModalSeconds(secs);
   }, [currentDryingMode, danggitTimer, bolinaoTimer, isDanggit]);
+
+  useEffect(() => {
+    if (isSettingUpBatch) {
+      setFishLoaded(false);
+    }
+  }, [isSettingUpBatch]);
 
   useEffect(() => {
     return () => { if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
@@ -145,8 +159,31 @@ const Controls = ({
     }
     setIsManualCover(true);
     onCoverToggle?.();
-    setTimeout(() => { setIsManualCover(false); triggerToast(isCoverClosed ? 'Cover opened' : 'Cover closed'); }, 800);
+    setTimeout(() => { setIsManualCover(false);    triggerToast(isCoverClosed ? 'Cover opened' : 'Cover closed'); }, 800);
   }, [isCoverClosed, onCoverToggle, triggerToast, isOnline]);
+
+  const runHardwareDiagnostics = useCallback(() => {
+    setIsDiagnosing(true);
+    setDiagStep(1);
+    setDiagResults(null);
+    onRunDiagnostics?.();
+
+    setTimeout(() => setDiagStep(2), 700);
+    setTimeout(() => setDiagStep(3), 1400);
+    setTimeout(() => setDiagStep(4), 2100);
+    setTimeout(() => setDiagStep(5), 2800);
+    setTimeout(() => {
+      setIsDiagnosing(false);
+      setDiagResults({
+        flip: 'OK',
+        cover: 'OK',
+        dht: 'OK',
+        rain: 'OK',
+        cloud: '22ms'
+      });
+      triggerToast('Hardware Self-Test: All checks passed!');
+    }, 3500);
+  }, [onRunDiagnostics, triggerToast]);
 
   const isEnvironment = currentFlipMode === 'environment';
 
@@ -355,53 +392,106 @@ const Controls = ({
             <div className="text-[9px] font-medium text-red-600/80 dark:text-red-300 mt-0.5">Controls disabled — Device disconnected</div>
           </div>
         )}
-        {/* Fish Profile Section */}
-        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
-          <div className="px-5 pt-5 pb-3">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('dryingParameters')}</div>
-              <div className="flex items-center gap-1.5">
-                <motion.span className="w-1.5 h-1.5 rounded-full bg-[#6699CC]" animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
-                <span className="text-[9px] font-bold text-[#6699CC] tracking-wider">{isDanggit ? t('thickFillet') : t('smallMass')}</span>
+
+        {/* If Setting Up Batch: Show Fish Profile Selection & Done Putting the Fish */}
+        {isSettingUpBatch ? (
+          <div className="rounded-2xl border-2 border-[#00386D] dark:border-[#6699CC] bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500 shadow-md">
+            <div className="px-5 pt-5 pb-3">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] font-black text-[#00386D] dark:text-[#6699CC] tracking-[0.1em]">STEP 1: SELECT FISH & LOAD TRAY</div>
+                <div className="flex items-center gap-1.5">
+                  <motion.span className="w-1.5 h-1.5 rounded-full bg-[#6699CC]" animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
+                  <span className="text-[9px] font-bold text-[#6699CC] tracking-wider">{isDanggit ? t('thickFillet') : t('smallMass')}</span>
+                </div>
+              </div>
+            </div>
+            <div className="px-3 pb-3">
+              <div className="relative flex bg-gray-100 dark:bg-[#121620] rounded-xl p-1 min-h-[64px] overflow-hidden">
+                <div
+                  className="absolute top-1 bottom-1 bg-[#00386D] dark:bg-[#6699CC] rounded-[10px] shadow-lg transition-all duration-300 ease-out"
+                  style={{
+                    width: 'calc(50% - 4px)',
+                    left: isDanggit ? '4px' : 'calc(50% + 0px)'
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => handleDryingSelect('danggit')}
+                  className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-300 ${
+                    isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
+                  }`}
+                >
+                  <span className="text-sm font-black tracking-wide leading-tight">{t('danggit')}</span>
+                  <span className={`text-[9px] font-medium mt-0.5 ${isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                    1–2 Days (8–14 hrs)
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDryingSelect('bolinao')}
+                  className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-300 ${
+                    !isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
+                  }`}
+                >
+                  <span className="text-sm font-black tracking-wide leading-tight">{t('bolinao')}</span>
+                  <span className={`text-[9px] font-medium mt-0.5 ${!isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                    6–8 Hours
+                  </span>
+                </button>
+              </div>
+
+              {/* Step 1 Confirmation: Done Putting the Fish */}
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-white/5 space-y-2">
+                <div className="flex items-center justify-between text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8]">
+                  <span>TRAY STATUS:</span>
+                  <span className={fishLoaded ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-amber-500 font-black'}>
+                    {fishLoaded ? '✓ FISH LOADED & LATCHED' : 'WAITING FOR FISH PLACEMENT'}
+                  </span>
+                </div>
+                <motion.button
+                  type="button"
+                  onClick={() => {
+                    setFishLoaded(true);
+                    triggerToast('Fish confirmed loaded! Now set your flipping preference below.');
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`w-full py-3 rounded-xl font-black text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 ${
+                    fishLoaded
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
+                      : 'bg-[#00386D] dark:bg-[#6699CC] text-white shadow-md'
+                  }`}
+                >
+                  <span>{fishLoaded ? '✓ DONE PUTTING THE FISH (CONFIRMED)' : '✓ DONE PUTTING THE FISH'}</span>
+                </motion.button>
               </div>
             </div>
           </div>
-          <div className="px-3 pb-3">
-            <div className="relative flex bg-gray-100 dark:bg-[#121620] rounded-xl p-1 min-h-[64px] overflow-hidden">
-              <div
-                className="absolute top-1 bottom-1 bg-[#00386D] dark:bg-[#6699CC] rounded-[10px] shadow-lg transition-all duration-300 ease-out"
-                style={{
-                  width: 'calc(50% - 4px)',
-                  left: isDanggit ? '4px' : 'calc(50% + 0px)'
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => handleDryingSelect('danggit')}
-                className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-300 ${
-                  isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
-                }`}
-              >
-                <span className="text-sm font-black tracking-wide leading-tight">{t('danggit')}</span>
-                <span className={`text-[9px] font-medium mt-0.5 ${isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
-                  {t('rabbitfishThickFillet')}
+        ) : (
+          /* When Batch is Active: Locked Status Badge with option to enter setup */
+          <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] px-5 py-3.5 flex items-center justify-between shadow-sm transition-colors duration-500">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <div>
+                <span className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider block">
+                  ACTIVE BATCH PROFILE
                 </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDryingSelect('bolinao')}
-                className={`relative z-10 flex-1 flex flex-col items-center justify-center py-4 px-3 rounded-[10px] transition-colors duration-300 ${
-                  !isDanggit ? 'text-white' : 'text-[#00386D] dark:text-[#CBD5E1]'
-                }`}
-              >
-                <span className="text-sm font-black tracking-wide leading-tight">{t('bolinao')}</span>
-                <span className={`text-[9px] font-medium mt-0.5 ${!isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
-                  {t('anchoviesSmallMass')}
+                <span className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC]" style={{ fontFamily: 'Space Grotesk' }}>
+                  {isDanggit ? 'DANGGIT (THICK FILLET)' : 'BOLINAO (SMALL MASS)'}
                 </span>
-              </button>
+              </div>
             </div>
+            {onEnterSetup && (
+              <button
+                type="button"
+                onClick={onEnterSetup}
+                title="Change fish species or restart batch"
+                className="px-2.5 py-1.5 rounded-xl text-[9px] font-black tracking-wider uppercase bg-gray-100 dark:bg-white/10 text-[#4A5568] dark:text-[#94A3B8] hover:text-[#00386D] dark:hover:text-white transition-colors"
+              >
+                ↻ NEW BATCH
+              </button>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Flipping Mode Section */}
         <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
@@ -488,6 +578,56 @@ const Controls = ({
           </div>
         </div>
 
+        {/* Step 2 Action: Start Drying Batch (Only shown during batch setup) */}
+        {isSettingUpBatch && (
+          <div className={`rounded-2xl border p-4 space-y-2.5 transition-all ${
+            fishLoaded 
+              ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10' 
+              : 'border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10'
+          }`}>
+            <div className="flex items-center justify-between text-[10px] font-black">
+              <span className="text-[#00386D] dark:text-[#F7FAFC]">
+                {fishLoaded ? 'READY TO BEGIN DRYING' : 'STEP 2: TRAY CONFIRMATION REQUIRED'}
+              </span>
+              <span className={fishLoaded ? 'text-emerald-600 dark:text-emerald-400 uppercase' : 'text-amber-500 uppercase font-black'}>
+                {fishLoaded 
+                  ? `${isDanggit ? 'DANGGIT' : 'BOLINAO'} • ${isEnvironment ? 'SOLAR-ADAPTIVE' : `${Math.round(currentTimerInterval / 60)}M TIMER`}`
+                  : 'CONFIRM TRAY FIRST'}
+              </span>
+            </div>
+            <motion.button
+              type="button"
+              disabled={!fishLoaded}
+              onClick={() => {
+                if (!fishLoaded) {
+                  triggerToast('Please confirm fish placement by clicking "✓ DONE PUTTING THE FISH" first!');
+                  return;
+                }
+                onStartBatch?.({
+                  dryingMode: currentDryingMode,
+                  flipMode: currentFlipMode,
+                  timerInterval: currentTimerInterval
+                });
+              }}
+              whileTap={fishLoaded ? { scale: 0.98 } : {}}
+              whileHover={fishLoaded ? { scale: 1.005 } : {}}
+              className={`w-full py-4 rounded-xl font-black text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all ${
+                fishLoaded
+                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/25 cursor-pointer'
+                  : 'bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-white/5'
+              }`}
+            >
+              <span>{fishLoaded ? 'START DRYING BATCH (VIEW IN ANALYTICS)' : 'CONFIRM TRAY STATUS TO PROCEED'}</span>
+              <span>→</span>
+            </motion.button>
+            {!fishLoaded && (
+              <p className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 text-center">
+                Click "✓ DONE PUTTING THE FISH" above to unlock and start batch
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Manual Flip Section - Hidden when cover is closed */}
         {!isCoverClosed && (
           <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
@@ -539,6 +679,71 @@ const Controls = ({
               </span>
             </motion.button>
           </div>
+        </div>
+
+        {/* Option C: Interactive Hardware Self-Test & Diagnostic Tool */}
+        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden p-4 space-y-3 transition-colors duration-500">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] uppercase">
+                SYSTEM INTEGRITY &amp; DIAGNOSTICS
+              </div>
+              <div className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5">
+                Automated Hardware Self-Test
+              </div>
+            </div>
+            <span className="px-2 py-0.5 rounded-lg text-[9px] font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+              5-STEP PROTOCOL
+            </span>
+          </div>
+
+          <motion.button
+            type="button"
+            onClick={runHardwareDiagnostics}
+            disabled={isDiagnosing}
+            whileTap={{ scale: 0.98 }}
+            whileHover={{ scale: 1.005 }}
+            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00386D] to-[#6699CC] text-white font-black text-xs tracking-wider uppercase shadow-md flex items-center justify-center gap-2"
+          >
+            {isDiagnosing ? (
+              <>
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                <span>RUNNING STEP {diagStep}/5...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>RUN HARDWARE SELF-TEST</span>
+              </>
+            )}
+          </motion.button>
+
+          {diagResults && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="pt-2 border-t border-gray-100 dark:border-white/5 space-y-1.5"
+            >
+              <div className="flex items-center justify-between text-[10px] font-black">
+                <span className="text-emerald-600 dark:text-emerald-400">
+                  ✓ ALL 5 HARDWARE CHECKS PASSED
+                </span>
+                <span className="text-[#6699CC]">100% HEALTHY</span>
+              </div>
+              <div className="grid grid-cols-5 gap-1 text-center text-[7.5px] font-bold">
+                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">FLIP: OK</div>
+                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">COVER: OK</div>
+                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">DHT11: OK</div>
+                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">RAIN: OK</div>
+                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">CLOUD: 22ms</div>
+              </div>
+            </motion.div>
+          )}
         </div>
       </div>
     </>

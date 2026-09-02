@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
-const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t, onSystemToggle, isSystemOn, isDeviceOnline, connectionStatus }) => {
+const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t, onSystemToggle, onGoToControls, isSystemOn, isDeviceOnline, connectionStatus }) => {
   const [pulseFields, setPulseFields] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const systemOn = isSystemOn !== undefined ? isSystemOn : true;
@@ -21,13 +21,13 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
   // Collect active fault warnings
   const faultWarnings = [];
   if (connStatus === 'offline') {
-    faultWarnings.push({ icon: '🔌', label: 'ESP32 OFFLINE', detail: 'No live telemetry from board · Check power and WiFi', color: 'red' });
+    faultWarnings.push({ label: 'ESP32 OFFLINE', detail: 'No live telemetry from board · Check power and WiFi', color: 'red' });
   } else if (connStatus === 'checking') {
-    faultWarnings.push({ icon: '⏳', label: 'CONNECTING...', detail: 'Waiting for live handshake from ESP32', color: 'amber' });
+    faultWarnings.push({ label: 'CONNECTING...', detail: 'Waiting for live handshake from ESP32', color: 'amber' });
   } else {
-    if (sensorFault) faultWarnings.push({ icon: '🌡️', label: 'SENSOR FAULT', detail: 'DHT sensor unreliable — fallback timer active (60s interval)', color: 'amber' });
-    if (motorStalled) faultWarnings.push({ icon: '⚙️', label: 'MOTOR JAM', detail: 'Flipping mechanism stalled — check hardware', color: 'red' });
-    if (wifiOffline) faultWarnings.push({ icon: '📡', label: 'WIFI OFFLINE', detail: 'Local mode active — auto-reconnecting', color: 'amber' });
+    if (sensorFault) faultWarnings.push({ label: 'SENSOR FAULT', detail: 'DHT sensor unreliable — fallback timer active (60s interval)', color: 'amber' });
+    if (motorStalled) faultWarnings.push({ label: 'MOTOR JAM', detail: 'Flipping mechanism stalled — check hardware', color: 'red' });
+    if (wifiOffline) faultWarnings.push({ label: 'WIFI OFFLINE', detail: 'Local mode active — auto-reconnecting', color: 'amber' });
   }
 
   useEffect(() => {
@@ -96,7 +96,12 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
   const getCycleDisplay = () => {
     if (!isOnline) return '--';
     if (sensorFault) return '60s*';
-    if (isEnvironment) return 'Adaptive';
+    if (isEnvironment) {
+      const state = systemState?.envSolarState;
+      if (state === 'PEAK_SOLAR') return 'Peak (Auto)';
+      if (state === 'LOW_SOLAR') return 'Low (Auto)';
+      return 'Adaptive';
+    }
     const interval = systemState?.timerInterval || (isDanggit ? 15 : 10);
     const hrs = Math.floor(interval / 3600);
     const mins = Math.floor((interval % 3600) / 60);
@@ -157,8 +162,10 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
               : !systemOn 
                 ? 'border-red-500/50 bg-red-500/10 dark:bg-red-500/20'
                 : displayData.rainDetected 
-                  ? 'border-[#6699CC]/50 bg-[#6699CC]/10 dark:bg-[#6699CC]/20' 
-                  : 'border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]'
+                  ? 'border-[#6699CC]/50 bg-[#6699CC]/10 dark:bg-[#6699CC]/20'
+                  : systemState?.isOffHours
+                    ? 'border-indigo-500/40 bg-indigo-500/10 dark:bg-indigo-500/20'
+                    : 'border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]'
         }`}
       >
         <div className="px-4 py-2">
@@ -167,18 +174,25 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
               connStatus === 'checking' ? 'text-amber-500 dark:text-amber-400' :
               !isOnline ? 'text-red-500 dark:text-red-400' :
               !systemOn ? 'text-red-500 dark:text-red-400' :
-              displayData.rainDetected ? 'text-[#6699CC]' : 'text-[#00386D] dark:text-[#F7FAFC]'
+              displayData.rainDetected ? 'text-[#6699CC]' :
+              systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#00386D] dark:text-[#F7FAFC]'
             }`}>
               {connStatus === 'checking' ? 'CHECKING ESP32...' :
-               !isOnline ? 'ESP32 OFFLINE' : !systemOn ? 'SYSTEM OFFLINE' : t('rainDetected')}
+               !isOnline ? 'ESP32 OFFLINE' :
+               !systemOn ? 'SYSTEM OFFLINE' :
+               displayData.rainDetected ? t('rainDetected') :
+               systemState?.isOffHours ? 'OFF-HOURS PAUSED' : t('systemActive') || 'SYSTEM ACTIVE'}
             </span>
             <span className={`text-xs font-black transition-colors duration-500 ${
               connStatus === 'checking' ? 'text-amber-500 dark:text-amber-400' :
               !isOnline ? 'text-red-500 dark:text-red-400' :
-              !systemOn ? 'text-red-500 dark:text-red-400' : 'text-[#6699CC]'
+              !systemOn ? 'text-red-500 dark:text-red-400' :
+              systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#6699CC]'
             }`}>
               {connStatus === 'checking' ? 'VERIFYING LIVE LINK' :
-               !isOnline ? 'DEVICE DISCONNECTED' : !systemOn ? 'PRESS TURN ON TO START' : t('enclosureSecured')}
+               !isOnline ? 'DEVICE DISCONNECTED' :
+               !systemOn ? 'PRESS TURN ON TO START' :
+               systemState?.isOffHours ? 'FLIPPING HALTED · RESUMES 7 AM' : t('enclosureSecured')}
             </span>
           </div>
         </div>
@@ -200,7 +214,9 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
               }`}
             >
               <div className="flex items-start gap-2.5">
-                <span className="text-base mt-0.5">{fault.icon}</span>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black mt-0.5 ${
+                  fault.color === 'red' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
+                }`}>!</span>
                 <div className="flex-1 min-w-0">
                   <div className={`text-[10px] font-black tracking-[0.05em] ${
                     fault.color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
@@ -261,12 +277,31 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
         </div>
       </div>
 
-      {/* System State */}
+      {/* DRYER STATUS */}
       <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="flex justify-between items-center">
-          <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('systemState')}</div>
-          <div className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC]" style={{ fontFamily: 'Space Grotesk' }}>
-            {!isOnline ? 'DEVICE OFFLINE' : systemOn ? t('phase2ActiveFlipping') : 'POWERED OFF'}
+          <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">DRYER STATUS</div>
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${
+              !isOnline || !systemOn ? 'bg-red-500' :
+              systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'bg-cyan-500 animate-ping' :
+              systemState?.isOffHours ? 'bg-indigo-500' :
+              'bg-emerald-500 animate-pulse'
+            }`} />
+            <div className={`text-sm font-black tracking-wide ${
+              !isOnline || !systemOn ? 'text-red-500 dark:text-red-400' :
+              systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'text-cyan-600 dark:text-cyan-400' :
+              systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' :
+              'text-emerald-600 dark:text-emerald-400'
+            }`} style={{ fontFamily: 'Space Grotesk' }}>
+              {!isOnline ? 'DEVICE OFFLINE' :
+               !systemOn ? 'POWERED OFF' :
+               systemState?.isPaused ? 'PAUSED' :
+               systemState?.coverClosed || displayData.rainDetected ? 'RAIN PROTECTION' :
+               systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'FLIPPING FISH' :
+               systemState?.isOffHours ? 'OFF-HOURS (NIGHT HOLD)' :
+               'DRYING FISH'}
+            </div>
           </div>
         </div>
       </div>
@@ -274,15 +309,21 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       {/* NEXT FLIP */}
       <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">
-          {!isOnline ? 'SYSTEM STATUS' : !systemOn ? 'SYSTEM STATUS' : (flipDisplay ? 'NEXT AUTO FLIP IN' : 'SYSTEM STATUS')}
+          {!isOnline ? 'SYSTEM STATUS' : !systemOn ? 'SYSTEM STATUS' : systemState?.isOffHours ? 'SOLAR DRYING SCHEDULE' : (flipDisplay ? 'NEXT AUTO FLIP IN' : 'SYSTEM STATUS')}
         </div>
         <div className={`text-2xl font-black tracking-tight ${
           !isOnline ? 'text-red-500 dark:text-red-400' :
           !systemOn ? 'text-red-500 dark:text-red-400' :
+          systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' :
           flipDisplay ? 'text-[#00386D] dark:text-[#F7FAFC]' : 'text-[#6699CC]'
         }`} style={{ fontFamily: 'Space Grotesk' }}>
-          {!isOnline ? 'OFFLINE' : !systemOn ? 'OFF' : (flipDisplay || 'AWAITING DATA')}
+          {!isOnline ? 'OFFLINE' : !systemOn ? 'OFF' : systemState?.isOffHours ? 'RESUMES 7:00 AM' : (flipDisplay || 'AWAITING DATA')}
         </div>
+        {systemState?.isOffHours && (
+          <div className="text-[9px] font-medium text-[#4A5568] dark:text-[#94A3B8] mt-0.5">
+            Flipping paused outside 7 AM – 4 PM sun window
+          </div>
+        )}
       </div>
 
       {/* POWER Button */}
@@ -310,6 +351,18 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
           </motion.button>
         </div>
       </div>
+
+      {/* Start New Batch Action Banner */}
+      <motion.button
+        type="button"
+        onClick={onGoToControls}
+        whileTap={{ scale: 0.98 }}
+        whileHover={{ scale: 1.005 }}
+        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#00386D] to-[#6699CC] text-white font-black text-xs tracking-wider uppercase shadow-md flex items-center justify-center gap-2 transition-all"
+      >
+        <span>+ START NEW DRYING BATCH</span>
+        <span className="text-xs">→</span>
+      </motion.button>
 
       {/* Quick Status Card */}
       <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] px-4 py-3 transition-colors duration-500">
