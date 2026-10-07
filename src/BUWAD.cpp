@@ -18,7 +18,6 @@
 #define RAIN_PIN 5
 #define SERVO_FLIP 6
 #define SERVO_COVER 7
-#define POWER_BUTTON_PIN 18 // Physical tactile ON/OFF toggle button
 
 // ===== LCD Configuration =====
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -61,6 +60,10 @@ String dryingMode = "danggit";
 String flipMode = "timer";
 int danggitTimer = 15; // In seconds (default: 15s)
 int bolinaoTimer = 10; // In seconds (default: 10s)
+const unsigned long ENV_COOLDOWN_SECONDS = 3600UL; // 1-hour drying cooldown (3600s) between flips
+unsigned long currentCycleInterval = 0; // Latched interval for active flip cycle
+unsigned long envExposureSeconds = 0;   // Accumulated exposure time under valid conditions
+unsigned long lastExposureTick = 0;     // Timestamp for 1-second exposure tracking
 int batchFlipCount = 0;
 bool powerOn = true;
 bool isPaused = false;
@@ -116,8 +119,8 @@ String getAdaptiveStateName();
 bool isWithinSolarHours();
 void recoverLCD();
 void runSelfTest();
-void IRAM_ATTR onPowerButtonISR();
-void handlePowerButton();
+unsigned long getCycleRemainingSeconds();
+bool isEnvConditionMet();
 
 // Dedicated FreeRTOS background task on Core 0 for smooth uninterrupted LCD updates
 // Includes auto-healing to permanently prevent and recover from servo electrical noise
@@ -153,8 +156,6 @@ void setup() {
   dht.begin();
   pinMode(RAIN_PIN, INPUT);
   pinMode(LDR_PIN, INPUT);
-  pinMode(POWER_BUTTON_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(POWER_BUTTON_PIN), onPowerButtonISR, FALLING);
 
   flipServo.attach(SERVO_FLIP);
   coverServo.attach(SERVO_COVER);
@@ -173,6 +174,7 @@ void setup() {
   readSensors();
   lastRainState = rainDetected;
   lastFlip = millis();
+  currentCycleInterval = (flipMode == "environment") ? getAdaptiveInterval() : ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer);
 
   // Step 4: Ready confirmation banner
   printLCDLine(0, "ALL SYSTEMS GO! ");
@@ -299,8 +301,32 @@ unsigned long getAdaptiveInterval() {
   return baseSecs;
 }
 
+// Strictly monotonic countdown calculation - cannot jump backwards or skip numbers
+unsigned long getCycleRemainingSeconds() {
+  if (flipMode == "environment") {
+    unsigned long elapsed = (millis() > lastFlip) ? ((millis() - lastFlip) / 1000UL) : 0;
+    if (elapsed < ENV_COOLDOWN_SECONDS) {
+      return ENV_COOLDOWN_SECONDS - elapsed;
+    }
+    return 0; // Cooldown expired, eligible for next flip when conditions are met
+  }
+  if (currentCycleInterval == 0) {
+    currentCycleInterval = ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer);
+  }
+  unsigned long elapsed = (millis() > lastFlip) ? ((millis() - lastFlip) / 1000UL) : 0;
+  if (elapsed < currentCycleInterval) {
+    return currentCycleInterval - elapsed;
+  }
+  return 0;
+}
+
+// Check if current environmental conditions strictly satisfy drying requirements
+bool isEnvConditionMet() {
+  return (sunlight >= 70 && temperature >= 32.0 && humidity <= 65.0);
+}
+
 String getAdaptiveStateName() {
-  if (sunlight >= 70 && temperature >= 32.0 && humidity <= 65.0) {
+  if (isEnvConditionMet()) {
     return "PEAK_SOLAR";
   } else if (sunlight < 40 || humidity > 75.0) {
     return "LOW_SOLAR";
@@ -365,21 +391,39 @@ void updateLCD() {
   } else if (!isWithinSolarHours()) {
     snprintf(line1, sizeof(line1), "%s [OFF-HOURS]", profileCode.c_str());
   } else {
-    unsigned long activeSeconds = (flipMode == "environment")
-                                      ? getAdaptiveInterval()
-                                      : ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer);
-    unsigned long interval = activeSeconds * 1000UL;
-    unsigned long remaining = 0;
-    if (millis() - lastFlip < interval)
-      remaining = (interval - (millis() - lastFlip)) / 1000;
+    unsigned long activeSeconds = (currentCycleInterval > 0)
+                                      ? currentCycleInterval
+                                      : ((flipMode == "environment")
+                                            ? getAdaptiveInterval()
+                                            : ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer));
+    unsigned long remaining = getCycleRemainingSeconds();
 
     unsigned long hrs = remaining / 3600;
     unsigned long mins = (remaining % 3600) / 60;
     unsigned long secs = remaining % 60;
 
     if (flipMode == "environment") {
-      String tag = (getAdaptiveStateName() == "PEAK_SOLAR") ? "PEAK" : ((getAdaptiveStateName() == "LOW_SOLAR") ? "LOW" : "MOD");
-      snprintf(line1, sizeof(line1), "%s [%s] %2lus", profileCode.c_str(), tag.c_str(), secs);
+      unsigned long elapsed = (millis() > lastFlip) ? ((millis() - lastFlip) / 1000UL) : 0;
+      if (elapsed < ENV_COOLDOWN_SECONDS) {
+        unsigned long rem = ENV_COOLDOWN_SECONDS - elapsed;
+        unsigned long m = rem / 60;
+        unsigned long s = rem % 60;
+        if (m >= 60) {
+          snprintf(line1, sizeof(line1), "%s [1H COOL] %luh", profileCode.c_str(), m / 60);
+        } else if (m > 0) {
+          snprintf(line1, sizeof(line1), "%s [1H COOL] %02lum", profileCode.c_str(), m);
+        } else {
+          snprintf(line1, sizeof(line1), "%s [1H COOL] %02lus", profileCode.c_str(), s);
+        }
+      } else if (isEnvConditionMet()) {
+        snprintf(line1, sizeof(line1), "%s [FLIPPING...]", profileCode.c_str());
+      } else if (sunlight < 70) {
+        snprintf(line1, sizeof(line1), "%s [WAIT:SUN]", profileCode.c_str());
+      } else if (temperature < 32.0) {
+        snprintf(line1, sizeof(line1), "%s [WAIT:TEMP]", profileCode.c_str());
+      } else {
+        snprintf(line1, sizeof(line1), "%s [WAIT:HUM]", profileCode.c_str());
+      }
     } else if (hrs > 0) {
       snprintf(line1, sizeof(line1), "%s %02luh:%02lum:%02lus",
                profileCode.c_str(), hrs, mins, secs);
@@ -395,8 +439,6 @@ void updateLCD() {
 }
 
 void loop() {
-  handlePowerButton();
-
   unsigned long now = millis();
 
   // --- WiFi Auto-Reconnect with Exponential Backoff ---
@@ -440,39 +482,6 @@ void loop() {
 }
 
 // ===== Hardware Interrupt for 100% Reliable Button Taps =====
-volatile bool buttonPressedFlag = false;
-volatile unsigned long lastButtonInterruptTime = 0;
-
-void IRAM_ATTR onPowerButtonISR() {
-  unsigned long now = millis();
-  // 300ms debounce window prevents mechanical bounce
-  if (now - lastButtonInterruptTime > 300) {
-    buttonPressedFlag = true;
-    lastButtonInterruptTime = now;
-  }
-}
-
-// ===== Instant Hardware Interrupt Button Handler =====
-void handlePowerButton() {
-  if (!buttonPressedFlag)
-    return;
-
-  buttonPressedFlag = false; // Reset flag immediately
-  powerOn = !powerOn;
-
-  Serial.println(powerOn ? "⚡ Power Turned ON via Button (GPIO 18)" : "💤 Power Turned OFF via Button (GPIO 18)");
-  showLCDMessage("BUWAD SYSTEM", powerOn ? "POWER: ON" : "POWER: OFF", 2000);
-  addLog("POWER_BUTTON", powerOn ? "Turned ON via physical button" : "Turned OFF via physical button");
-
-  // Sync state to Firebase RTDB so web dashboard reflects it immediately
-  if (firebaseOK) {
-    FirebaseJson json;
-    json.set("powerOn", powerOn);
-    Firebase.RTDB.updateNode(&fbdo, "system", &json);
-    publishSystemState();
-  }
-}
-
 bool settingsInitialized = false;
 String lastProcessedLcdMessage = "";
 
@@ -487,8 +496,7 @@ void checkSettings() {
     // --- On First Boot: Read Initial State Quietly Without Flashing Banners
     // ---
     if (!settingsInitialized) {
-      if (json.get(jsonData, "powerOn") && jsonData.success)
-        powerOn = jsonData.boolValue;
+      powerOn = true; // Always start up actively powered on
       if (json.get(jsonData, "dryingMode") && jsonData.success &&
           jsonData.stringValue.length() > 0)
         dryingMode = jsonData.stringValue;
@@ -881,16 +889,16 @@ void publishSystemState() {
   if (!firebaseOK)
     return;
 
-  unsigned long activeSeconds = (flipMode == "environment")
-                                    ? getAdaptiveInterval()
-                                    : ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer);
-  unsigned long interval = activeSeconds * 1000UL;
-  unsigned long remaining = 0;
-  if (millis() > lastFlip && (millis() - lastFlip) < interval) {
-    remaining = (interval - (millis() - lastFlip)) / 1000;
-  }
+  unsigned long activeSeconds = (currentCycleInterval > 0)
+                                    ? currentCycleInterval
+                                    : ((flipMode == "environment")
+                                          ? getAdaptiveInterval()
+                                          : ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer));
+  unsigned long remaining = getCycleRemainingSeconds();
 
   bool offHours = !isWithinSolarHours();
+  bool envMet = isEnvConditionMet();
+  bool inCooldown = (flipMode == "environment" && (millis() - lastFlip < ENV_COOLDOWN_SECONDS * 1000UL));
   String phase = "idle";
   if (!powerOn)
     phase = "offline";
@@ -902,7 +910,17 @@ void publishSystemState() {
     phase = "rain_protection";
   else if (offHours)
     phase = "off_hours";
-  else if (remaining > 0)
+  else if (flipMode == "environment") {
+    if (inCooldown) {
+      phase = "env_cooldown";
+    } else if (!envMet) {
+      if (sunlight < 70) phase = "waiting_sun";
+      else if (temperature < 32.0) phase = "waiting_temp";
+      else phase = "waiting_humidity";
+    } else {
+      phase = "activeflipping";
+    }
+  } else if (remaining > 0)
     phase = "activeflipping";
   else
     phase = "flipping";
@@ -916,6 +934,9 @@ void publishSystemState() {
   json.set("bolinaoTimer", bolinaoTimer);
   json.set("batchFlipCount", batchFlipCount);
   json.set("envSolarState", getAdaptiveStateName());
+  json.set("envConditionsMet", envMet);
+  json.set("envCooldownActive", inCooldown);
+  json.set("envExposureSecs", (int)envExposureSeconds);
   json.set("envAdaptiveSecs", (int)activeSeconds);
   json.set("isPaused", isPaused);
   json.set("coverClosed", coverClosed);
@@ -974,6 +995,10 @@ void executeFlip() {
   }
 
   lastFlip = millis();
+  envExposureSeconds = 0; // Reset exposure accumulator for the new side
+  currentCycleInterval = (flipMode == "environment") 
+                            ? getAdaptiveInterval() 
+                            : ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer);
   batchFlipCount++;
   addLog("FLIP_EXECUTED", "Position: " + String(targetAngle) + "°");
   publishSystemState();
@@ -999,16 +1024,26 @@ void handleAutoFlip() {
     return;
   }
 
-  unsigned long activeSeconds = (flipMode == "environment")
-                                    ? getAdaptiveInterval()
-                                    : ((dryingMode == "danggit") ? danggitTimer : bolinaoTimer);
-  unsigned long interval = activeSeconds * 1000UL;
+  // ===== ENVIRONMENT-DRIVEN FLIPPING WITH 1-HOUR COOLDOWN =====
+  if (flipMode == "environment") {
+    unsigned long elapsed = (millis() > lastFlip) ? ((millis() - lastFlip) / 1000UL) : 0;
 
-  if (millis() - lastFlip >= interval) {
-    executeFlip();
-    if (flipMode == "environment") {
-      addLog("ENV_FLIP", "State: " + getAdaptiveStateName() + " (Interval: " + String(activeSeconds) + "s, Sun: " + String(sunlight) + "%, T: " + String((int)temperature) + "C, H: " + String((int)humidity) + "%)");
+    // Must wait for 1-hour (3600s) drying cooldown on current side before next flip is eligible
+    if (elapsed >= ENV_COOLDOWN_SECONDS) {
+      // Condition required: Peak Solar (Sunlight >= 70%, Temp >= 32C, Humidity <= 65%)
+      if (isEnvConditionMet()) {
+        Serial.println("☀️ 1-Hour cooldown finished & Environmental requirements met - executing flip!");
+        executeFlip();
+        addLog("ENV_FLIP", "1-Hour cooldown completed + Peak solar satisfied (Sun: " + String(sunlight) + "%, T: " + String((int)temperature) + "C, H: " + String((int)humidity) + "%) - Flipped side");
+      }
     }
+    return;
+  }
+
+  // ===== TIMER-BASED FLIPPING =====
+  if (getCycleRemainingSeconds() == 0) {
+    executeFlip();
+    addLog("TIMER_FLIP", "Interval: " + String(currentCycleInterval) + "s");
   }
 }
 

@@ -72,8 +72,13 @@
     border-radius: 12px;
   }
   
-  button {
+  button:not(.btn-compact) {
     min-height: 48px;
+    cursor: pointer;
+  }
+
+  button.btn-compact {
+    min-height: 0;
     cursor: pointer;
   }
 }

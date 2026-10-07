@@ -66,10 +66,23 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
 
   const [countdown, setCountdown] = useState(systemState?.nextFlip || 0);
 
-  // Sync with incoming Firebase updates
+  // Sync with incoming Firebase updates with anti-jitter smoothing
   useEffect(() => {
     if (typeof systemState?.nextFlip === 'number') {
-      setCountdown(systemState.nextFlip);
+      const serverVal = systemState.nextFlip;
+      setCountdown(prev => {
+        // If a new flip cycle started (server value reset to full interval) or countdown was at 0
+        if (serverVal > prev + 2 || prev <= 0) {
+          return serverVal;
+        }
+        // If minor network latency difference (within 2 seconds), keep smooth local countdown
+        // to prevent jumping backward or skipping numbers
+        if (Math.abs(prev - serverVal) <= 2) {
+          return prev;
+        }
+        // If major drift (> 2 seconds), gently snap to server value
+        return serverVal;
+      });
     }
   }, [systemState?.nextFlip]);
 
@@ -85,6 +98,20 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
   const getFlipDisplay = () => {
     if (!systemOn || !isOnline) return null;
     if (!hasSensorData) return null;
+    if (isEnvironment) {
+      const phase = systemState?.phase;
+      if (phase === 'env_cooldown') {
+        const secs = countdown > 0 ? countdown : (systemState?.envCooldownSecs || 0);
+        const mins = Math.floor(secs / 60);
+        const s = secs % 60;
+        return mins > 0 ? `${mins}m ${s}s` : `${s}s`;
+      }
+      if (phase === 'waiting_sun') return 'WAITING: SUN < 70%';
+      if (phase === 'waiting_temp') return 'WAITING: TEMP < 32°C';
+      if (phase === 'waiting_humidity') return 'WAITING: HUM > 65%';
+      if (systemState?.envConditionsMet) return 'PEAK DRYING ACTIVE';
+      return 'WAITING FOR CONDITIONS';
+    }
     if (countdown <= 0 || isNaN(countdown)) {
       return '00:00';
     }
@@ -286,12 +313,16 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
               !isOnline || !systemOn ? 'bg-red-500' :
               systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'bg-cyan-500 animate-ping' :
               systemState?.isOffHours ? 'bg-indigo-500' :
+              systemState?.phase === 'env_cooldown' ? 'bg-cyan-500 animate-pulse' :
+              systemState?.phase?.startsWith('waiting_') ? 'bg-amber-500 animate-pulse' :
               'bg-emerald-500 animate-pulse'
             }`} />
             <div className={`text-sm font-black tracking-wide ${
               !isOnline || !systemOn ? 'text-red-500 dark:text-red-400' :
               systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'text-cyan-600 dark:text-cyan-400' :
               systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' :
+              systemState?.phase === 'env_cooldown' ? 'text-cyan-600 dark:text-cyan-400' :
+              systemState?.phase?.startsWith('waiting_') ? 'text-amber-600 dark:text-amber-400' :
               'text-emerald-600 dark:text-emerald-400'
             }`} style={{ fontFamily: 'Space Grotesk' }}>
               {!isOnline ? 'DEVICE OFFLINE' :
@@ -300,6 +331,10 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
                systemState?.coverClosed || displayData.rainDetected ? 'RAIN PROTECTION' :
                systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'FLIPPING FISH' :
                systemState?.isOffHours ? 'OFF-HOURS (NIGHT HOLD)' :
+               systemState?.phase === 'env_cooldown' ? 'DRYING (1-HR COOLDOWN)' :
+               systemState?.phase === 'waiting_sun' ? 'HOLD: WAITING FOR SUN' :
+               systemState?.phase === 'waiting_temp' ? 'HOLD: WAITING FOR HEAT' :
+               systemState?.phase === 'waiting_humidity' ? 'HOLD: HIGH HUMIDITY' :
                'DRYING FISH'}
             </div>
           </div>
@@ -309,16 +344,27 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       {/* NEXT FLIP */}
       <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">
-          {!isOnline ? 'SYSTEM STATUS' : !systemOn ? 'SYSTEM STATUS' : systemState?.isOffHours ? 'SOLAR DRYING SCHEDULE' : (flipDisplay ? 'NEXT AUTO FLIP IN' : 'SYSTEM STATUS')}
+          {!isOnline ? 'SYSTEM STATUS' : !systemOn ? 'SYSTEM STATUS' : systemState?.isOffHours ? 'SOLAR DRYING SCHEDULE' : isEnvironment && systemState?.phase === 'env_cooldown' ? '1-HOUR DRYING COOLDOWN' : isEnvironment ? 'ENVIRONMENT REQUIREMENT' : (flipDisplay ? 'NEXT AUTO FLIP IN' : 'SYSTEM STATUS')}
         </div>
         <div className={`text-2xl font-black tracking-tight ${
           !isOnline ? 'text-red-500 dark:text-red-400' :
           !systemOn ? 'text-red-500 dark:text-red-400' :
           systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' :
+          systemState?.phase === 'env_cooldown' ? 'text-cyan-600 dark:text-cyan-400' :
+          systemState?.phase?.startsWith('waiting_') ? 'text-amber-600 dark:text-amber-400' :
           flipDisplay ? 'text-[#00386D] dark:text-[#F7FAFC]' : 'text-[#6699CC]'
         }`} style={{ fontFamily: 'Space Grotesk' }}>
           {!isOnline ? 'OFFLINE' : !systemOn ? 'OFF' : systemState?.isOffHours ? 'RESUMES 7:00 AM' : (flipDisplay || 'AWAITING DATA')}
         </div>
+        {isEnvironment && !systemState?.isOffHours && isOnline && systemOn && (
+          <div className="text-[9px] font-medium text-[#4A5568] dark:text-[#94A3B8] mt-0.5">
+            {systemState?.phase === 'env_cooldown'
+              ? 'Fish drying on current side · 1-hour cooldown active before next eligible flip'
+              : systemState?.phase?.startsWith('waiting_')
+              ? '1-Hour cooldown finished · Waiting for Sun >= 70%, Temp >= 32°C, Humidity <= 65%'
+              : 'Peak conditions met · Ready to flip'}
+          </div>
+        )}
         {systemState?.isOffHours && (
           <div className="text-[9px] font-medium text-[#4A5568] dark:text-[#94A3B8] mt-0.5">
             Flipping paused outside 7 AM – 4 PM sun window
