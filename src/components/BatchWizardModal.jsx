@@ -331,7 +331,7 @@ const BatchWizardModal = ({
                   onClick={handleLaunch}
                   whileTap={{ scale: 0.98 }}
                   whileHover={{ scale: 1.005 }}
-                  className="flex-1 py-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all"
+                  className="flex-1 py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs tracking-wider uppercase shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 transition-all"
                 >
                   <span>🚀 START DRYING BATCH</span>
                 </motion.button>

@@ -71,14 +71,7 @@
     background-color: #6699CC;
     border-radius: 12px;
   }
-  
-  button:not(.btn-compact) {
-    min-height: 48px;
-    cursor: pointer;
-  }
-
-  button.btn-compact {
-    min-height: 0;
+  button {
     cursor: pointer;
   }
 }

@@ -168,9 +168,9 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
             <div className="px-3 py-3"><div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('rainSensor')}</div><div className="h-6 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
           </div>
         </div>
-        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('systemState')}</div><div className="h-5 w-28 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div></div>
-        <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">NEXT AUTO FLIP IN</div><div className="h-8 w-24 mx-auto bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
-        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div><div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">POWER</div><div className="h-4 w-8 mt-0.5 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div><div className="h-10 w-24 bg-gray-200 dark:bg-white/10 rounded-xl animate-pulse" /></div></div>
+        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('systemState')}</div><div className="h-5 w-28 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div></div>
+        <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">NEXT AUTO FLIP IN</div><div className="h-8 w-24 mx-auto bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div>
+        <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10"><div className="flex justify-between items-center"><div><div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">POWER</div><div className="h-4 w-8 mt-0.5 bg-gray-200 dark:bg-white/10 rounded animate-pulse" /></div><div className="h-10 w-24 bg-gray-200 dark:bg-white/10 rounded-xl animate-pulse" /></div></div>
       </div>
     );
   }
@@ -191,7 +191,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
                 : displayData.rainDetected 
                   ? 'border-[#6699CC]/50 bg-[#6699CC]/10 dark:bg-[#6699CC]/20'
                   : systemState?.isOffHours
-                    ? 'border-indigo-500/40 bg-indigo-500/10 dark:bg-indigo-500/20'
+                    ? 'border-amber-500/40 bg-amber-500/10 dark:bg-amber-500/20'
                     : 'border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C]'
         }`}
       >
@@ -202,7 +202,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
               !isOnline ? 'text-red-500 dark:text-red-400' :
               !systemOn ? 'text-red-500 dark:text-red-400' :
               displayData.rainDetected ? 'text-[#6699CC]' :
-              systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#00386D] dark:text-[#F7FAFC]'
+              systemState?.isOffHours ? 'text-amber-600 dark:text-amber-400' : 'text-[#00386D] dark:text-[#F7FAFC]'
             }`}>
               {connStatus === 'checking' ? 'CHECKING ESP32...' :
                !isOnline ? 'ESP32 OFFLINE' :
@@ -214,7 +214,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
               connStatus === 'checking' ? 'text-amber-500 dark:text-amber-400' :
               !isOnline ? 'text-red-500 dark:text-red-400' :
               !systemOn ? 'text-red-500 dark:text-red-400' :
-              systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' : 'text-[#6699CC]'
+              systemState?.isOffHours ? 'text-amber-600 dark:text-amber-400' : 'text-[#6699CC]'
             }`}>
               {connStatus === 'checking' ? 'VERIFYING LIVE LINK' :
                !isOnline ? 'DEVICE DISCONNECTED' :
@@ -241,16 +241,16 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
               }`}
             >
               <div className="flex items-start gap-2.5">
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black mt-0.5 ${
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-xs font-black mt-0.5 ${
                   fault.color === 'red' ? 'bg-red-500 text-white' : 'bg-amber-500 text-white'
                 }`}>!</span>
                 <div className="flex-1 min-w-0">
-                  <div className={`text-[10px] font-black tracking-[0.05em] ${
+                  <div className={`text-xs font-black tracking-[0.05em] ${
                     fault.color === 'red' ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
                   }`}>
                     {fault.label}
                   </div>
-                  <div className={`text-[9px] font-medium mt-0.5 ${
+                  <div className={`text-xs font-medium mt-0.5 ${
                     fault.color === 'red' ? 'text-red-500/80 dark:text-red-400/70' : 'text-amber-500/80 dark:text-amber-400/70'
                   }`}>
                     {fault.detail}
@@ -263,7 +263,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       )}
 
       {/* Environmental Data Label */}
-      <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] transition-colors duration-500">
+      <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] transition-colors duration-500">
         {t('environmentalData')}
       </div>
       
@@ -271,29 +271,29 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       <div className="rounded-2xl overflow-hidden border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] transition-colors duration-500">
         <div className="grid grid-cols-2">
           <div className={`px-3 py-3 border-r border-b border-[#BDBCBD] dark:border-white/10 transition-colors duration-500 ${getPulseClass('temperature')}`}>
-            <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('temperature')}</div>
+            <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('temperature')}</div>
             <div className="text-xl font-black text-[#00386D] dark:text-[#F7FAFC] tracking-tight" style={{ fontFamily: 'Space Grotesk' }}>
               {isOnline && displayData.temperature !== null ? displayData.temperature.toFixed(1) : '--'}
-              <span className="text-[10px] ml-0.5 text-[#4A5568] dark:text-[#94A3B8]">°C</span>
+              <span className="text-xs ml-0.5 font-bold text-[#4A5568] dark:text-[#94A3B8]">°C</span>
             </div>
           </div>
           <div className={`px-3 py-3 border-b border-[#BDBCBD] dark:border-white/10 transition-colors duration-500 ${getPulseClass('humidity')}`}>
-            <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('humidity')}</div>
+            <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('humidity')}</div>
             <div className="text-xl font-black text-[#00386D] dark:text-[#F7FAFC] tracking-tight" style={{ fontFamily: 'Space Grotesk' }}>
               {isOnline && displayData.humidity !== null ? Math.floor(displayData.humidity) : '--'}
-              <span className="text-[10px] ml-0.5 text-[#4A5568] dark:text-[#94A3B8]">%</span>
+              <span className="text-xs ml-0.5 font-bold text-[#4A5568] dark:text-[#94A3B8]">%</span>
             </div>
           </div>
         </div>
         <div className="grid grid-cols-2">
           <div className={`px-3 py-3 border-r border-[#BDBCBD] dark:border-white/10 transition-colors duration-500 ${getPulseClass('sunlight')}`}>
-            <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('sunlight')}</div>
+            <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('sunlight')}</div>
             <div className="text-base font-black text-[#00386D] dark:text-[#F7FAFC] tracking-tight" style={{ fontFamily: 'Space Grotesk' }}>
               {isOnline && displayData.sunlight !== null ? sunlightLabel : '--'}
             </div>
           </div>
           <div className={`px-3 py-3 transition-colors duration-500 ${getPulseClass('rainDetected')}`}>
-            <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('rainSensor')}</div>
+            <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">{t('rainSensor')}</div>
             <div className={`text-base font-black tracking-tight ${
               !isOnline ? 'text-[#4A5568] dark:text-[#94A3B8]' :
               displayData.rainDetected ? 'text-[#6699CC]' : 'text-[#00386D] dark:text-[#F7FAFC]'
@@ -307,21 +307,21 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       {/* DRYER STATUS */}
       <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="flex justify-between items-center">
-          <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">DRYER STATUS</div>
+          <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">DRYER STATUS</div>
           <div className="flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${
               !isOnline || !systemOn ? 'bg-red-500' :
-              systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'bg-cyan-500 animate-ping' :
-              systemState?.isOffHours ? 'bg-indigo-500' :
-              systemState?.phase === 'env_cooldown' ? 'bg-cyan-500 animate-pulse' :
+              systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'bg-[#6699CC] animate-ping' :
+              systemState?.isOffHours ? 'bg-amber-500' :
+              systemState?.phase === 'env_cooldown' ? 'bg-[#6699CC] animate-pulse' :
               systemState?.phase?.startsWith('waiting_') ? 'bg-amber-500 animate-pulse' :
               'bg-emerald-500 animate-pulse'
             }`} />
             <div className={`text-sm font-black tracking-wide ${
               !isOnline || !systemOn ? 'text-red-500 dark:text-red-400' :
-              systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'text-cyan-600 dark:text-cyan-400' :
-              systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' :
-              systemState?.phase === 'env_cooldown' ? 'text-cyan-600 dark:text-cyan-400' :
+              systemState?.phase === 'flipping' || systemState?.phase === 'manual_flipping' ? 'text-[#6699CC]' :
+              systemState?.isOffHours ? 'text-amber-600 dark:text-amber-400' :
+              systemState?.phase === 'env_cooldown' ? 'text-[#6699CC]' :
               systemState?.phase?.startsWith('waiting_') ? 'text-amber-600 dark:text-amber-400' :
               'text-emerald-600 dark:text-emerald-400'
             }`} style={{ fontFamily: 'Space Grotesk' }}>
@@ -343,21 +343,21 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
 
       {/* NEXT FLIP */}
       <div className="rounded-2xl px-4 py-3 text-center bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
-        <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">
+        <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] mb-1">
           {!isOnline ? 'SYSTEM STATUS' : !systemOn ? 'SYSTEM STATUS' : systemState?.isOffHours ? 'SOLAR DRYING SCHEDULE' : isEnvironment && systemState?.phase === 'env_cooldown' ? '1-HOUR DRYING COOLDOWN' : isEnvironment ? 'ENVIRONMENT REQUIREMENT' : (flipDisplay ? 'NEXT AUTO FLIP IN' : 'SYSTEM STATUS')}
         </div>
         <div className={`text-2xl font-black tracking-tight ${
           !isOnline ? 'text-red-500 dark:text-red-400' :
           !systemOn ? 'text-red-500 dark:text-red-400' :
-          systemState?.isOffHours ? 'text-indigo-600 dark:text-indigo-400' :
-          systemState?.phase === 'env_cooldown' ? 'text-cyan-600 dark:text-cyan-400' :
+          systemState?.isOffHours ? 'text-amber-600 dark:text-amber-400' :
+          systemState?.phase === 'env_cooldown' ? 'text-[#6699CC]' :
           systemState?.phase?.startsWith('waiting_') ? 'text-amber-600 dark:text-amber-400' :
           flipDisplay ? 'text-[#00386D] dark:text-[#F7FAFC]' : 'text-[#6699CC]'
         }`} style={{ fontFamily: 'Space Grotesk' }}>
           {!isOnline ? 'OFFLINE' : !systemOn ? 'OFF' : systemState?.isOffHours ? 'RESUMES 7:00 AM' : (flipDisplay || 'AWAITING DATA')}
         </div>
         {isEnvironment && !systemState?.isOffHours && isOnline && systemOn && (
-          <div className="text-[9px] font-medium text-[#4A5568] dark:text-[#94A3B8] mt-0.5">
+          <div className="text-xs font-medium text-[#4A5568] dark:text-[#94A3B8] mt-1">
             {systemState?.phase === 'env_cooldown'
               ? 'Fish drying on current side · 1-hour cooldown active before next eligible flip'
               : systemState?.phase?.startsWith('waiting_')
@@ -366,7 +366,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
           </div>
         )}
         {systemState?.isOffHours && (
-          <div className="text-[9px] font-medium text-[#4A5568] dark:text-[#94A3B8] mt-0.5">
+          <div className="text-xs font-medium text-[#4A5568] dark:text-[#94A3B8] mt-1">
             Flipping paused outside 7 AM – 4 PM sun window
           </div>
         )}
@@ -376,7 +376,7 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
       <div className="rounded-2xl px-4 py-3 bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 transition-colors duration-500">
         <div className="flex justify-between items-center">
           <div>
-            <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">POWER</div>
+            <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">POWER</div>
             <div className={`text-xs font-black mt-0.5 ${
               !isOnline ? 'text-red-500 dark:text-red-400' :
               systemOn ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
@@ -403,11 +403,12 @@ const Dashboard = ({ sensorData, systemState, sunlightLabel, formatCountdown, t,
         type="button"
         onClick={onGoToControls}
         whileTap={{ scale: 0.98 }}
-        whileHover={{ scale: 1.005 }}
-        className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-[#00386D] to-[#6699CC] text-white font-black text-xs tracking-wider uppercase shadow-md flex items-center justify-center gap-2 transition-all"
+        whileHover={{ scale: 1.01 }}
+        className="w-full py-4 rounded-2xl bg-[#00386D] hover:bg-[#002d57] text-white font-black text-xs tracking-widest uppercase shadow-lg shadow-[#00386D]/25 border-2 border-[#6699CC]/40 flex items-center justify-center gap-2.5 transition-all"
       >
-        <span>+ START NEW DRYING BATCH</span>
-        <span className="text-xs">→</span>
+        <span className="w-5 h-5 rounded-lg bg-white/20 flex items-center justify-center text-sm font-black">+</span>
+        <span>START NEW DRYING BATCH</span>
+        <span className="text-sm font-bold ml-1 text-[#6699CC] dark:text-white">→</span>
       </motion.button>
 
       {/* Quick Status Card */}

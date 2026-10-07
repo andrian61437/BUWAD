@@ -19,11 +19,14 @@ const Controls = ({
   isSettingUpBatch = false,
   onEnterSetup,
   isDeviceOnline,
+  rainDetected = false,
   t 
 }) => {
   const [fishLoaded, setFishLoaded] = useState(false);
   const [isManualFliping, setIsManualFliping] = useState(false);
   const [isManualCover, setIsManualCover] = useState(false);
+  const [confirmRainOpen, setConfirmRainOpen] = useState(false);
+  const confirmRainTimeoutRef = useRef(null);
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [diagStep, setDiagStep] = useState(0);
   const [diagResults, setDiagResults] = useState(null);
@@ -74,14 +77,27 @@ const Controls = ({
   }, [isSettingUpBatch]);
 
   useEffect(() => {
-    return () => { if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current); };
+    return () => { 
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+      if (confirmRainTimeoutRef.current) clearTimeout(confirmRainTimeoutRef.current);
+    };
   }, []);
 
-  const triggerToast = useCallback((msg) => {
+  useEffect(() => {
+    if (!rainDetected || !isCoverClosed) {
+      setConfirmRainOpen(false);
+      if (confirmRainTimeoutRef.current) {
+        clearTimeout(confirmRainTimeoutRef.current);
+        confirmRainTimeoutRef.current = null;
+      }
+    }
+  }, [rainDetected, isCoverClosed]);
+
+  const triggerToast = useCallback((msg, duration = 1800) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToastMessage(msg);
     setShowToast(true);
-    toastTimeoutRef.current = setTimeout(() => { setShowToast(false); toastTimeoutRef.current = null; }, 1800);
+    toastTimeoutRef.current = setTimeout(() => { setShowToast(false); toastTimeoutRef.current = null; }, duration);
   }, []);
 
   const handleDryingSelect = useCallback((mode) => {
@@ -157,10 +173,32 @@ const Controls = ({
       triggerToast('ESP32 is offline');
       return;
     }
+
+    // Safety guard: if cover is closed, it's raining, and user has not confirmed yet
+    if (isCoverClosed && rainDetected && !confirmRainOpen) {
+      setConfirmRainOpen(true);
+      triggerToast('It is raining! Click again if you want to open the cover.', 4000);
+      if (confirmRainTimeoutRef.current) clearTimeout(confirmRainTimeoutRef.current);
+      confirmRainTimeoutRef.current = setTimeout(() => {
+        setConfirmRainOpen(false);
+        confirmRainTimeoutRef.current = null;
+      }, 4500);
+      return;
+    }
+
+    if (confirmRainTimeoutRef.current) {
+      clearTimeout(confirmRainTimeoutRef.current);
+      confirmRainTimeoutRef.current = null;
+    }
+    setConfirmRainOpen(false);
+
     setIsManualCover(true);
     onCoverToggle?.();
-    setTimeout(() => { setIsManualCover(false);    triggerToast(isCoverClosed ? 'Cover opened' : 'Cover closed'); }, 800);
-  }, [isCoverClosed, onCoverToggle, triggerToast, isOnline]);
+    setTimeout(() => { 
+      setIsManualCover(false);    
+      triggerToast(isCoverClosed ? 'Cover opened' : 'Cover closed'); 
+    }, 800);
+  }, [isCoverClosed, rainDetected, confirmRainOpen, onCoverToggle, triggerToast, isOnline]);
 
   const runHardwareDiagnostics = useCallback(() => {
     setIsDiagnosing(true);
@@ -310,7 +348,7 @@ const Controls = ({
                 </div>
               </div>
               <div>
-                <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">MINS</div>
+                <div className="text-xs font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">MINS</div>
                 <div className="h-32 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
                   {minutesOptions.map((m) => {
                     const active = modalMinutes === m;
@@ -332,7 +370,7 @@ const Controls = ({
                 </div>
               </div>
               <div>
-                <div className="text-[9px] font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">SECS</div>
+                <div className="text-xs font-black text-center text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1.5">SECS</div>
                 <div className="h-32 overflow-y-auto pr-1 space-y-1 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-white/10">
                   {secondsOptions.map((s) => {
                     const active = modalSeconds === s;
@@ -388,8 +426,8 @@ const Controls = ({
       <div className="space-y-4">
         {!isOnline && (
           <div className="rounded-2xl border border-red-500/50 bg-red-500/10 dark:bg-red-500/20 px-4 py-3 text-center transition-colors duration-500">
-            <div className="text-[10px] font-black text-red-600 dark:text-red-400">ESP32 OFFLINE</div>
-            <div className="text-[9px] font-medium text-red-600/80 dark:text-red-300 mt-0.5">Controls disabled — Device disconnected</div>
+            <div className="text-xs font-black text-red-600 dark:text-red-400">ESP32 OFFLINE</div>
+            <div className="text-xs font-medium text-red-600/80 dark:text-red-300 mt-0.5">Controls disabled — Device disconnected</div>
           </div>
         )}
 
@@ -398,10 +436,10 @@ const Controls = ({
           <div className="rounded-2xl border-2 border-[#00386D] dark:border-[#6699CC] bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500 shadow-md">
             <div className="px-5 pt-5 pb-3">
               <div className="flex items-center justify-between">
-                <div className="text-[10px] font-black text-[#00386D] dark:text-[#6699CC] tracking-[0.1em]">STEP 1: SELECT FISH & LOAD TRAY</div>
+                <div className="text-xs font-black text-[#00386D] dark:text-[#6699CC] tracking-[0.1em]">STEP 1: SELECT FISH & LOAD TRAY</div>
                 <div className="flex items-center gap-1.5">
                   <motion.span className="w-1.5 h-1.5 rounded-full bg-[#6699CC]" animate={{ opacity: [1, 0.4, 1] }} transition={{ repeat: Infinity, duration: 2 }} />
-                  <span className="text-[9px] font-bold text-[#6699CC] tracking-wider">{isDanggit ? t('thickFillet') : t('smallMass')}</span>
+                  <span className="text-xs font-bold text-[#6699CC] tracking-wider">{isDanggit ? t('thickFillet') : t('smallMass')}</span>
                 </div>
               </div>
             </div>
@@ -422,7 +460,7 @@ const Controls = ({
                   }`}
                 >
                   <span className="text-sm font-black tracking-wide leading-tight">{t('danggit')}</span>
-                  <span className={`text-[9px] font-medium mt-0.5 ${isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  <span className={`text-xs font-medium mt-0.5 ${isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
                     1–2 Days (8–14 hrs)
                   </span>
                 </button>
@@ -434,7 +472,7 @@ const Controls = ({
                   }`}
                 >
                   <span className="text-sm font-black tracking-wide leading-tight">{t('bolinao')}</span>
-                  <span className={`text-[9px] font-medium mt-0.5 ${!isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  <span className={`text-xs font-medium mt-0.5 ${!isDanggit ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
                     6–8 Hours
                   </span>
                 </button>
@@ -442,7 +480,7 @@ const Controls = ({
 
               {/* Step 1 Confirmation: Done Putting the Fish */}
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-white/5 space-y-2">
-                <div className="flex items-center justify-between text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8]">
+                <div className="flex items-center justify-between text-xs font-bold text-[#4A5568] dark:text-[#94A3B8]">
                   <span>TRAY STATUS:</span>
                   <span className={fishLoaded ? 'text-emerald-600 dark:text-emerald-400 font-black' : 'text-amber-500 font-black'}>
                     {fishLoaded ? '✓ FISH LOADED & LATCHED' : 'WAITING FOR FISH PLACEMENT'}
@@ -472,7 +510,7 @@ const Controls = ({
             <div className="flex items-center gap-2.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               <div>
-                <span className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider block">
+                <span className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider block">
                   ACTIVE BATCH PROFILE
                 </span>
                 <span className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC]" style={{ fontFamily: 'Space Grotesk' }}>
@@ -485,9 +523,9 @@ const Controls = ({
                 type="button"
                 onClick={onEnterSetup}
                 title="Change fish species or restart batch"
-                className="px-2.5 py-1.5 rounded-xl text-[9px] font-black tracking-wider uppercase bg-gray-100 dark:bg-white/10 text-[#4A5568] dark:text-[#94A3B8] hover:text-[#00386D] dark:hover:text-white transition-colors"
+                className="px-3.5 py-2 rounded-xl text-xs font-black tracking-wider uppercase bg-[#00386D] hover:bg-[#002d57] text-white dark:bg-[#6699CC] dark:text-white dark:hover:bg-[#5588bb] shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 border border-[#6699CC]/40 dark:border-white/10"
               >
-                ↻ NEW BATCH
+                <span>+ NEW BATCH</span>
               </button>
             )}
           </div>
@@ -497,10 +535,10 @@ const Controls = ({
         <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
           <div className="px-5 pt-5 pb-3">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('flippingMode')}</div>
+              <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('flippingMode')}</div>
               <div className="flex items-center gap-1.5">
                 <span className={`w-1.5 h-1.5 rounded-full ${isEnvironment ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-                <span className={`text-[9px] font-bold tracking-wider ${isEnvironment ? 'text-emerald-500' : 'text-amber-500'}`}>
+                <span className={`text-xs font-bold tracking-wider ${isEnvironment ? 'text-emerald-500' : 'text-amber-500'}`}>
                   {isEnvironment ? t('sensorDrivenLabel') : t('fixedIntervalLabel')}
                 </span>
               </div>
@@ -523,7 +561,7 @@ const Controls = ({
                 }`}
               >
                 <span className="text-xs font-black tracking-wide leading-tight text-center">{t('environmentBased')}</span>
-                <span className={`text-[8px] font-medium mt-0.5 text-center ${isEnvironment ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                <span className={`text-xs font-medium mt-0.5 text-center ${isEnvironment ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
                   {t('sensorDriven')}
                 </span>
               </button>
@@ -535,7 +573,7 @@ const Controls = ({
                 }`}
               >
                 <span className="text-xs font-black tracking-wide leading-tight text-center">{t('timerBased')}</span>
-                <span className={`text-[8px] font-medium mt-0.5 text-center ${!isEnvironment ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                <span className={`text-xs font-medium mt-0.5 text-center ${!isEnvironment ? 'text-white/80' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
                   {t('fixedInterval')}
                 </span>
               </button>
@@ -557,7 +595,7 @@ const Controls = ({
                     </svg>
                   </div>
                   <div>
-                    <div className="text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">CURRENT INTERVAL</div>
+                    <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">CURRENT INTERVAL</div>
                     <div className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC]">{currentDurationLabel()}</div>
                   </div>
                 </div>
@@ -585,7 +623,7 @@ const Controls = ({
               ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10' 
               : 'border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10'
           }`}>
-            <div className="flex items-center justify-between text-[10px] font-black">
+            <div className="flex items-center justify-between text-xs font-black">
               <span className="text-[#00386D] dark:text-[#F7FAFC]">
                 {fishLoaded ? 'READY TO BEGIN DRYING' : 'STEP 2: TRAY CONFIRMATION REQUIRED'}
               </span>
@@ -613,7 +651,7 @@ const Controls = ({
               whileHover={fishLoaded ? { scale: 1.005 } : {}}
               className={`w-full py-4 rounded-xl font-black text-xs tracking-wider uppercase flex items-center justify-center gap-2 transition-all ${
                 fishLoaded
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/25 cursor-pointer'
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/25 cursor-pointer'
                   : 'bg-gray-200 dark:bg-white/10 text-gray-400 dark:text-gray-500 cursor-not-allowed border border-gray-300 dark:border-white/5'
               }`}
             >
@@ -621,22 +659,58 @@ const Controls = ({
               <span>→</span>
             </motion.button>
             {!fishLoaded && (
-              <p className="text-[9.5px] font-bold text-amber-600 dark:text-amber-400 text-center">
+              <p className="text-xs font-bold text-amber-600 dark:text-amber-400 text-center">
                 Click "✓ DONE PUTTING THE FISH" above to unlock and start batch
               </p>
             )}
           </div>
         )}
 
-        {/* Manual Flip Section - Hidden when cover is closed */}
-        {!isCoverClosed && (
-          <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
-            <div className="px-5 pt-5 pb-2">
-              <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('flipMechanism')}</div>
+        {/* Manual Flip Section - Non-collapsing stable card */}
+        <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
+          <div className="px-5 pt-5 pb-2">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">{t('flipMechanism')}</div>
+              {isCoverClosed && (
+                <span className="px-2.5 py-1 rounded-lg text-xs font-black uppercase tracking-wide border bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20">
+                  {rainDetected ? 'LOCKED (RAIN PROTECTION)' : 'LOCKED (MANUAL COVER)'}
+                </span>
+              )}
             </div>
-            <div className="px-3 pb-3">
-              <motion.button type="button" onClick={handleManualFlip} disabled={isManualFliping} whileTap={{ scale: 0.98 }} whileHover={{ scale: 1.005 }}
-                className={`w-full py-6 rounded-xl font-black text-base tracking-wide relative overflow-hidden ${isManualFliping ? 'bg-[#00386D]/40 dark:bg-[#6699CC]/40 text-white/70 cursor-not-allowed' : 'bg-[#00386D] dark:bg-[#6699CC] text-white shadow-lg'}`}>
+          </div>
+          <div className="px-3 pb-3">
+            {isCoverClosed ? (
+              <div className="w-full py-5 px-4 rounded-xl border flex flex-col items-center justify-center gap-1.5 text-center select-none transition-colors duration-500 border-red-500/30 bg-red-500/10 dark:bg-red-500/15">
+                <div className="text-sm font-black uppercase tracking-wider flex items-center gap-2 text-red-600 dark:text-red-400">
+                  {rainDetected ? (
+                    <>
+                      <svg className="w-4 h-4 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                      </svg>
+                      FLIP DISABLED: RAIN DETECTED
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 text-red-500 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      FLIP DISABLED: COVER CLOSED MANUALLY
+                    </>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <motion.button 
+                type="button" 
+                onClick={handleManualFlip} 
+                disabled={isManualFliping} 
+                whileTap={{ scale: 0.98 }}
+                className={`w-full py-6 rounded-xl font-black text-base tracking-wide relative overflow-hidden transition-colors duration-300 ${
+                  isManualFliping 
+                    ? 'bg-[#00386D]/40 dark:bg-[#6699CC]/40 text-white/70 cursor-not-allowed' 
+                    : 'bg-[#00386D] hover:bg-[#002d57] dark:bg-[#6699CC] text-white shadow-lg'
+                }`}
+              >
                 {isManualFliping && <motion.div className="absolute inset-0 bg-white/20" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ repeat: Infinity, duration: 0.8 }} />}
                 <span className="relative z-10 flex items-center justify-center gap-3">
                   {isManualFliping ? (
@@ -646,38 +720,69 @@ const Controls = ({
                   )}
                 </span>
               </motion.button>
-            </div>
+            )}
           </div>
-        )}
-
-        {/* Cover closed warning when Flip Now is hidden */}
-        {isCoverClosed && (
-          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 dark:bg-red-500/20 px-4 py-3 text-center transition-colors duration-500">
-            <div className="text-[10px] font-black text-red-600 dark:text-red-400">FLIP DISABLED</div>
-            <div className="text-[9px] font-medium text-red-600/80 dark:text-red-300 mt-0.5">{t('coverIsOn')} — Open cover to enable flipping</div>
-          </div>
-        )}
+        </div>
 
         {/* Cover Control Section */}
         <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden transition-colors duration-500">
           <div className="px-5 pt-5 pb-2">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">COVER CONTROL</div>
+              <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em]">COVER CONTROL</div>
               <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${isCoverClosed ? 'bg-red-500' : 'bg-green-500'}`} />
-                <span className={`text-[9px] font-bold tracking-wider ${isCoverClosed ? 'text-red-500' : 'text-green-500'}`}>{isCoverClosed ? 'CLOSED' : 'OPEN'}</span>
+                <span className={`w-2 h-2 rounded-full ${isCoverClosed ? 'bg-red-500' : 'bg-green-500'}`} />
+                <span className={`text-xs font-bold tracking-wider ${isCoverClosed ? 'text-red-500' : 'text-green-500'}`}>{isCoverClosed ? 'CLOSED' : 'OPEN'}</span>
               </div>
             </div>
           </div>
           <div className="px-3 pb-3">
-            <motion.button type="button" onClick={handleCoverToggle} disabled={isManualCover} whileTap={{ scale: 0.98 }} whileHover={{ scale: 1.005 }}
-              className={`w-full py-6 rounded-xl font-black text-base tracking-wide relative overflow-hidden ${isManualCover ? 'bg-gray-400/40 text-white/70 cursor-not-allowed' : isCoverClosed ? 'bg-green-600 text-white shadow-lg' : 'bg-red-500 text-white shadow-lg'}`}>
+            <motion.button 
+              type="button" 
+              onClick={handleCoverToggle} 
+              disabled={isManualCover} 
+              whileTap={{ scale: 0.98 }}
+              className={`w-full py-6 rounded-xl font-black text-base tracking-wide relative overflow-hidden transition-colors duration-300 ${
+                isManualCover 
+                  ? 'bg-gray-400/40 text-white/70 cursor-not-allowed' 
+                  : isCoverClosed 
+                    ? (confirmRainOpen
+                        ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg border-2 border-red-400/40'
+                        : 'bg-green-600 hover:bg-green-700 text-white shadow-lg')
+                    : 'bg-red-500 hover:bg-red-600 text-white shadow-lg'
+              }`}
+            >
               {isManualCover && <motion.div className="absolute inset-0 bg-white/20" initial={{ x: '-100%' }} animate={{ x: '100%' }} transition={{ repeat: Infinity, duration: 0.8 }} />}
               <span className="relative z-10 flex items-center justify-center gap-3">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
-                <span>{isCoverClosed ? 'OPEN COVER' : 'CLOSE COVER'}</span>
+                {confirmRainOpen ? (
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                )}
+                <span>
+                  {isCoverClosed 
+                    ? (confirmRainOpen ? 'CONFIRM: OPEN COVER ANYWAY' : 'OPEN COVER') 
+                    : 'CLOSE COVER'}
+                </span>
               </span>
             </motion.button>
+            {confirmRainOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-2.5 px-3 py-2 rounded-xl bg-red-500/15 dark:bg-red-500/20 border border-red-500/30 flex items-center justify-center gap-2 text-center"
+              >
+                <svg className="w-4 h-4 text-red-600 dark:text-red-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span className="text-xs font-black text-red-600 dark:text-red-400 tracking-wide uppercase">
+                  Rain detected — Click again to open cover
+                </span>
+              </motion.div>
+            )}
           </div>
         </div>
 
@@ -685,14 +790,14 @@ const Controls = ({
         <div className="rounded-2xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] overflow-hidden p-4 space-y-3 transition-colors duration-500">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] uppercase">
+              <div className="text-xs font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] uppercase">
                 SYSTEM INTEGRITY &amp; DIAGNOSTICS
               </div>
-              <div className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5">
+              <div className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5">
                 Automated Hardware Self-Test
               </div>
             </div>
-            <span className="px-2 py-0.5 rounded-lg text-[9px] font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 uppercase tracking-wide">
+            <span className="px-2.5 py-1 rounded-lg text-xs font-black bg-[#6699CC]/15 text-[#00386D] dark:text-[#6699CC] uppercase tracking-wide">
               5-STEP PROTOCOL
             </span>
           </div>
@@ -703,7 +808,7 @@ const Controls = ({
             disabled={isDiagnosing}
             whileTap={{ scale: 0.98 }}
             whileHover={{ scale: 1.005 }}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#00386D] to-[#6699CC] text-white font-black text-xs tracking-wider uppercase shadow-md flex items-center justify-center gap-2"
+            className="w-full py-3.5 rounded-xl bg-[#00386D] hover:bg-[#002d57] text-white font-black text-xs tracking-wider uppercase shadow-md flex items-center justify-center gap-2 transition-colors"
           >
             {isDiagnosing ? (
               <>
@@ -729,18 +834,18 @@ const Controls = ({
               animate={{ opacity: 1, height: 'auto' }}
               className="pt-2 border-t border-gray-100 dark:border-white/5 space-y-1.5"
             >
-              <div className="flex items-center justify-between text-[10px] font-black">
+              <div className="flex items-center justify-between text-xs font-black">
                 <span className="text-emerald-600 dark:text-emerald-400">
                   ✓ ALL 5 HARDWARE CHECKS PASSED
                 </span>
-                <span className="text-[#6699CC]">100% HEALTHY</span>
+                <span className="text-[#6699CC] font-black">100% HEALTHY</span>
               </div>
-              <div className="grid grid-cols-5 gap-1 text-center text-[7.5px] font-bold">
-                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">FLIP: OK</div>
-                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">COVER: OK</div>
-                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">DHT11: OK</div>
-                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">RAIN: OK</div>
-                <div className="p-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">CLOUD: 22ms</div>
+              <div className="grid grid-cols-5 gap-1.5 text-center text-xs font-black">
+                <div className="py-1 px-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">FLIP: OK</div>
+                <div className="py-1 px-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">COVER: OK</div>
+                <div className="py-1 px-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">DHT11: OK</div>
+                <div className="py-1 px-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">RAIN: OK</div>
+                <div className="py-1 px-0.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">CLOUD: OK</div>
               </div>
             </motion.div>
           )}

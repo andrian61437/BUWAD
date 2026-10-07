@@ -3,7 +3,29 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#if __has_include("secrets.h")
 #include "secrets.h"
+#endif
+
+// Fallback credentials if secrets.h is omitted (can also be overridden via build_flags)
+#ifndef WIFI_SSID
+#define WIFI_SSID "ARJIZZY"
+#endif
+#ifndef WIFI_PASSWORD
+#define WIFI_PASSWORD "johannabanana"
+#endif
+#ifndef API_KEY
+#define API_KEY "AIzaSyDTgbj_NLixe0huyqXEiDGk3fw2Jr-Clgg"
+#endif
+#ifndef DATABASE_URL
+#define DATABASE_URL "https://buwad-iot-dashboard-default-rtdb.firebaseio.com/"
+#endif
+#ifndef USER_EMAIL
+#define USER_EMAIL "buwad@gmail.com"
+#endif
+#ifndef USER_PASSWORD
+#define USER_PASSWORD "buwad123"
+#endif
 #include <DHT.h>
 #include <ESP32Servo.h>
 #include <Firebase_ESP_Client.h>
@@ -16,6 +38,8 @@
 #define DHTTYPE DHT11
 #define LDR_PIN 1
 #define RAIN_PIN 5
+#define RAIN_TRIGGER_THRESHOLD 500  // Sensitivity trigger for water level sensor (0-4095 ADC)
+#define RAIN_CLEAR_THRESHOLD 350    // Hysteresis release threshold to avoid rapid flapping
 #define SERVO_FLIP 6
 #define SERVO_COVER 7
 
@@ -51,6 +75,7 @@ bool firebaseOK = false;
 float temperature = 0;
 float humidity = 0;
 int sunlight = 0;
+int rainRaw = 0;
 bool rainDetected = false;
 bool lastRainState = false;
 float lastGoodTemp = 25.0;
@@ -161,8 +186,10 @@ void setup() {
   coverServo.attach(SERVO_COVER);
   flipServo.write(0);
   coverServo.write(0);
+  delay(600);
+  coverServo.detach(); // Detach when idle
   coverClosed = false;
-  Serial.println("✓ Servos initialized");
+  Serial.println("✓ Servos initialized (cover servo rested)");
 
   // Step 1: Connect to WiFi with live LCD diagnostics
   connectWiFi();
@@ -236,19 +263,27 @@ void showLCDMessage(String line1, String line2, unsigned long durationMs) {
 }
 
 void closeCover() {
-  coverServo.write(180);
+  if (!coverServo.attached()) {
+    coverServo.attach(SERVO_COVER);
+  }
+  coverServo.write(170); // 170 avoids hitting hard-stop limits that cause buzzing/jitter
   coverClosed = true;
-  delay(600);
-  recoverLCD(); // Clear any voltage drop glitch from servo draw
-  Serial.println("🛡️ Cover CLOSED");
+  delay(650);
+  coverServo.detach(); // Detach PWM to silence motor hum and prevent continuous twitching
+  recoverLCD();        // Clear any voltage drop glitch from servo draw
+  Serial.println("🛡️ Cover CLOSED (servo rested)");
 }
 
 void openCover() {
+  if (!coverServo.attached()) {
+    coverServo.attach(SERVO_COVER);
+  }
   coverServo.write(0);
   coverClosed = false;
-  delay(600);
-  recoverLCD(); // Clear any voltage drop glitch from servo draw
-  Serial.println("🛡️ Cover OPENED");
+  delay(650);
+  coverServo.detach(); // Detach PWM to silence motor hum and prevent continuous twitching
+  recoverLCD();        // Clear any voltage drop glitch from servo draw
+  Serial.println("🛡️ Cover OPENED (servo rested)");
 }
 
 // Automated 5-Step Hardware Diagnostics & Self-Test Routine
@@ -265,10 +300,12 @@ void runSelfTest() {
 
   // Test canopy servo
   showLCDMessage("DIAGNOSTICS", "TEST 2: COVER", 800);
+  if (!coverServo.attached()) coverServo.attach(SERVO_COVER);
   coverServo.write(45);
   delay(400);
   coverServo.write(0);
   delay(400);
+  coverServo.detach();
   recoverLCD();
 
   // Test sensors
@@ -813,7 +850,12 @@ void readSensors() {
   }
 
   sunlight = constrain(map(analogRead(LDR_PIN), 0, 4095, 0, 100), 0, 100);
-  rainDetected = (digitalRead(RAIN_PIN) == HIGH);
+  rainRaw = analogRead(RAIN_PIN);
+  if (!rainDetected && rainRaw >= RAIN_TRIGGER_THRESHOLD) {
+    rainDetected = true;
+  } else if (rainDetected && rainRaw < RAIN_CLEAR_THRESHOLD) {
+    rainDetected = false;
+  }
 }
 
 void handleWiFiReconnect() {
@@ -878,6 +920,7 @@ void publishSensorData() {
   json.set("humidity", humidity > 0 ? humidity : 50.0);
   json.set("sunlight", sunlight);
   json.set("rainDetected", rainDetected);
+  json.set("rainRaw", rainRaw);
   json.set("sensorFault", sensorFault);
   json.set("motorStalled", motorStalled);
   json.set("timestamp", getTimestamp());
@@ -1052,13 +1095,15 @@ void handleRainProtection() {
     lastRainState = true;
     closeCover();
     addAlert("Rain detected", "HIGH");
-    addLog("RAIN_PROTECTION", "Cover closed");
+    addLog("RAIN_PROTECTION", "Cover closed (Sensor: " + String(rainRaw) + ")");
     showLCDMessage("RAIN DETECTED!", "Cover Closed", 2000);
+    Serial.printf("🌧️ Rain detected! Analog level: %d (threshold: %d)\n", rainRaw, RAIN_TRIGGER_THRESHOLD);
   } else if (!rainDetected && lastRainState) {
     lastRainState = false;
     openCover();
-    addLog("RAIN_CLEARED", "Cover open");
+    addLog("RAIN_CLEARED", "Cover open (Sensor: " + String(rainRaw) + ")");
     showLCDMessage("Rain Cleared", "Cover Opened", 2000);
+    Serial.printf("☀️ Rain cleared! Analog level: %d (below: %d)\n", rainRaw, RAIN_CLEAR_THRESHOLD);
   }
 }
 

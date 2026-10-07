@@ -8,7 +8,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        'canvas': '#E8EDF3',
+        'navy': '#00386D',          // Primary Brand: Deep Ocean Navy
+        'steel-blue': '#6699CC',    // Secondary Accent: Solar Sky Steel Blue
+        'canvas': '#E8EDF3',        // Background Light Canvas
+        'canvas-dark': '#1A202C',   // Background Midnight Slate
+        'surface-dark': '#2D3748',  // Dark Surface Tile / Border
+        'border-light': '#BDBCBD',  // Neutral Border Light
+        'text-muted': '#4A5568',    // Muted Subtitle Light
+        'text-muted-dark': '#94A3B8', // Muted Subtitle Dark
+        'status-emerald': '#10B981', // Status Nominal / Active / Passing Standard
+        'status-amber': '#F59E0B',   // Status Warning / Off-Hours Hold
+        'status-crimson': '#EF4444', // Status Hazard / Rain Alarm / Error
         'deep-charcoal': '#1A202C',
       },
       fontFamily: {

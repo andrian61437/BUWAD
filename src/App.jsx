@@ -87,6 +87,7 @@ function AppContent() {
   const triggersCleanupRef = useRef(null);
   const logsLoadedRef = useRef(false);
   const ignoreNextSystemUpdateRef = useRef(false);
+  const coverTransitionUntilRef = useRef(0);
   const prevRainRef = useRef(false);
   const prevFlipsRef = useRef(null);
 
@@ -286,9 +287,10 @@ function AppContent() {
   const handleCoverToggle = useCallback(() => {
     const isCurrentlyClosed = systemState.coverClosed;
     const nextCoverState = !isCurrentlyClosed;
+    coverTransitionUntilRef.current = Date.now() + 4000;
     setSystemState(prev => ({ ...prev, coverClosed: nextCoverState }));
     addLogEntry({ action: 'CANOPY_TOGGLE_SENT', details: nextCoverState ? 'Closing canopy' : 'Opening canopy' });
-    writeToSystem({ manualCover: true });
+    writeToSystem({ manualCover: true, coverClosed: nextCoverState });
   }, [systemState.coverClosed, addLogEntry, writeToSystem]);
 
   const handleRunDiagnostics = useCallback(() => {
@@ -477,6 +479,10 @@ function AppContent() {
         const curTimer = data.timerInterval !== undefined ? data.timerInterval : (curMode === 'danggit' ? dTimer : bTimer);
         const bStart = data.batchStartTime !== undefined ? data.batchStartTime : (prev.batchStartTime || Date.now());
         if (data.batchStartTime) localStorage.setItem('buwad_batch_start', data.batchStartTime.toString());
+        const isCoverInTransition = Date.now() < coverTransitionUntilRef.current || data.manualCover === true;
+        const resolvedCoverClosed = isCoverInTransition
+          ? prev.coverClosed
+          : (data.coverClosed !== undefined ? data.coverClosed : prev.coverClosed);
         return {
           phase: data.phase || prev.phase,
           nextFlip: data.nextFlip !== undefined ? data.nextFlip : prev.nextFlip,
@@ -489,7 +495,7 @@ function AppContent() {
           manualOverride: prev.manualOverride,
           dryingMode: curMode,
           flipMode: data.flipMode || prev.flipMode,
-          coverClosed: data.coverClosed !== undefined ? data.coverClosed : prev.coverClosed
+          coverClosed: resolvedCoverClosed
         };
       });
     });
@@ -704,6 +710,7 @@ function AppContent() {
                   isSettingUpBatch={isSettingUpBatch}
                   onEnterSetup={() => setIsSettingUpBatch(true)}
                   isDeviceOnline={isDeviceOnline}
+                  rainDetected={Boolean(isDeviceOnline && sensorData?.rainDetected)}
                   t={t} 
                 />
               )}
@@ -735,13 +742,29 @@ function AppContent() {
           </AnimatePresence>
         </div>
         <LayoutGroup>
-          <nav className="fixed bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md rounded-2xl shadow-2xl bg-white dark:bg-[#1A202C] border border-[#BDBCBD] dark:border-white/10 z-30">
-            <div className="flex justify-around items-center p-2">
+          <nav className="fixed bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2 w-[calc(100%-1.25rem)] max-w-md rounded-2xl shadow-2xl bg-white/95 dark:bg-[#1A202C]/95 backdrop-blur-md border border-[#BDBCBD] dark:border-white/10 z-30">
+            <div className="flex items-center justify-between p-1.5 sm:p-2">
               {navItems.map((item) => (
-                <motion.button key={item.id} onClick={() => setActiveTab(item.id)} className="relative flex-1 py-3 flex flex-col items-center gap-1 rounded-xl" whileTap={{ scale: 0.95 }}>
-                  {activeTab === item.id && <motion.div layoutId="activeNav" className="absolute inset-0 rounded-xl bg-[#00386D]/10 dark:bg-[#6699CC]/20" transition={{ type: 'spring', stiffness: 500, damping: 30 }} />}
-                  <span className={`text-lg relative z-10 ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>{item.icon}</span>
-                  <span className={`text-[8px] font-bold tracking-[0.1em] relative z-10 ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>{item.label}</span>
+                <motion.button 
+                  key={item.id} 
+                  onClick={() => setActiveTab(item.id)} 
+                  title={item.label}
+                  className="relative flex-1 min-w-0 py-2 sm:py-2.5 px-0.5 flex flex-col items-center justify-center gap-0.5 sm:gap-1 rounded-xl select-none" 
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {activeTab === item.id && (
+                    <motion.div 
+                      layoutId="activeNav" 
+                      className="absolute inset-0 rounded-xl bg-[#00386D]/10 dark:bg-[#6699CC]/20" 
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }} 
+                    />
+                  )}
+                  <span className={`text-base sm:text-lg relative z-10 leading-none ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                    {item.icon}
+                  </span>
+                  <span className={`text-[9.5px] sm:text-[11px] font-black tracking-tight sm:tracking-normal relative z-10 w-full text-center truncate px-0.5 block leading-tight ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                    {item.label}
+                  </span>
                 </motion.button>
               ))}
             </div>

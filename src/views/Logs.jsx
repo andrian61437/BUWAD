@@ -64,9 +64,9 @@ const Logs = ({ activityLogs, t }) => {
 
   const getTypeColor = (type) => {
     switch(type) {
-      case 'manual': return 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400';
-      case 'sensor': return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400';
-      default: return 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-400';
+      case 'manual': return 'bg-[#6699CC]/15 text-[#00386D] dark:text-[#6699CC]';
+      case 'sensor': return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400';
+      default: return 'bg-[#00386D]/5 dark:bg-white/10 text-[#00386D] dark:text-[#94A3B8]';
     }
   };
 

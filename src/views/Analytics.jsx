@@ -909,9 +909,9 @@ const Analytics = ({
                 type="button"
                 onClick={onOpenBatchWizard || onResetBatch}
                 title="Open batch setup wizard for new tray"
-                className="px-2.5 py-1 rounded-xl text-[9px] font-black tracking-wider uppercase bg-gray-100 dark:bg-white/10 text-[#4A5568] dark:text-[#94A3B8] hover:text-[#00386D] dark:hover:text-white transition-colors"
+                className="px-3 py-1.5 rounded-xl text-[10px] font-black tracking-wider uppercase bg-[#00386D] hover:bg-[#002d57] text-white dark:bg-[#6699CC] dark:text-white dark:hover:bg-[#5588bb] shadow-sm hover:shadow-md transition-all flex items-center gap-1.5 border border-[#6699CC]/40 dark:border-white/10"
               >
-                ↻ NEW BATCH
+                <span>+ NEW BATCH</span>
               </button>
               <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#00386D]/5 dark:bg-[#6699CC]/15 border border-[#00386D]/10 dark:border-white/5">
                 <span className={`w-2 h-2 rounded-full ${isSystemOn && isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
@@ -922,7 +922,7 @@ const Analytics = ({
             </div>
           </div>
 
-          {/* Full Sun Drying Period Indicator */}
+          {/* Drying Window Target */}
           <div className="mt-3 flex items-center justify-between px-3 py-2 bg-[#00386D]/5 dark:bg-[#6699CC]/10 rounded-2xl border border-[#00386D]/10 dark:border-white/5">
             <div className="flex items-center gap-2">
               <svg className="w-4 h-4 text-[#00386D] dark:text-[#6699CC]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -931,10 +931,10 @@ const Analytics = ({
               </svg>
               <div>
                 <div className="text-[9px] font-black text-[#00386D] dark:text-[#F7FAFC] uppercase tracking-wider">
-                  FULL SUN DRYING PERIOD
+                  DRYING TARGET
                 </div>
                 <div className="text-[10px] font-medium text-[#4A5568] dark:text-[#94A3B8]">
-                  {isDanggit ? '1–2 Days (8–14 Hours Standard)' : '6–8 Hours Full Sun Standard'}
+                  {isDanggit ? '12 Hours (1–2 Days)' : '7 Hours (1 Day)'}
                 </div>
               </div>
             </div>
@@ -951,12 +951,12 @@ const Analytics = ({
                 <span className="text-[#00386D] dark:text-[#F7FAFC] font-black font-mono text-[11px]">
                   {formatTimeHM(elapsedSeconds)}
                 </span>
-                <span className="text-[9px] text-[#6699CC] font-bold">/ {targetDurationSeconds / 3600}h target</span>
+                <span className="text-[9px] text-[#6699CC] font-bold">/ {targetDurationSeconds / 3600}h</span>
               </div>
               <div className="text-right">
                 <span className="text-[#00386D] dark:text-[#6699CC] font-black">{batchProgressPercent}%</span>
                 <span className="text-[#4A5568] dark:text-[#94A3B8] text-[10px] font-medium ml-1.5">
-                  ({formatRemainingHM(remainingSeconds)})
+                  ({formatRemainingHM(remainingSeconds)} left)
                 </span>
               </div>
             </div>
@@ -965,33 +965,33 @@ const Analytics = ({
                 initial={{ width: 0 }}
                 animate={{ width: `${batchProgressPercent}%` }}
                 transition={{ duration: 0.8, ease: 'easeOut' }}
-                className="h-full bg-gradient-to-r from-[#00386D] to-[#6699CC] rounded-full"
+                className="h-full bg-[#6699CC] rounded-full"
               />
             </div>
             <div className="flex justify-between items-center text-[9px] font-bold text-[#4A5568] dark:text-[#94A3B8] pt-0.5 px-0.5">
               <span className={`flex items-center gap-1 ${isSolarWindowActive ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-                {isSolarWindowActive ? '● Active Window (7 AM – 4 PM)' : '◐ Off-Hours Paused (Resumes 7 AM)'}
+                {isSolarWindowActive ? '● Sun Window Active (7 AM – 4 PM)' : '◐ Off-Hours (Resumes 7 AM)'}
               </span>
-              <span className="text-[#00386D] dark:text-[#6699CC]">Est. Done: {estimatedFinishTime}</span>
+              <span className="text-[#00386D] dark:text-[#6699CC]">Done: {estimatedFinishTime}</span>
             </div>
           </div>
 
           {/* 3-Column Batch Stats */}
           <div className="grid grid-cols-3 gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-white/5 text-center">
             <div className="p-2 rounded-2xl bg-gray-50 dark:bg-white/5">
-              <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">{t('totalFlips') || 'TOTAL FLIPS'}</div>
+              <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">FLIPS</div>
               <div className="text-base font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
                 {flipCount}
               </div>
             </div>
             <div className="p-2 rounded-2xl bg-gray-50 dark:bg-white/5">
-              <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">RAIN SAFES</div>
+              <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">RAIN SHIELDS</div>
               <div className="text-base font-black text-emerald-600 dark:text-emerald-400 mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
                 {rainCount}
               </div>
             </div>
             <div className="p-2 rounded-2xl bg-gray-50 dark:bg-white/5">
-              <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">{t('timeSaved') || 'TIME SAVED'}</div>
+              <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">TIME SAVED</div>
               <div className="text-base font-black text-[#6699CC] mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
                 {timeSavedFormatted}
               </div>
@@ -1016,15 +1016,15 @@ const Analytics = ({
             </div>
             <div>
               <h3 className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC] uppercase tracking-wider">
-                DAILY SOLAR DRYING WINDOW
+                SUNLIGHT SCHEDULE
               </h3>
               <p className="text-[9px] font-medium text-[#4A5568] dark:text-[#94A3B8]">
-                7:00 AM – 4:00 PM (Up to 9 Active Drying Hours / Day)
+                Active 7:00 AM – 4:00 PM (9h daily window)
               </p>
             </div>
           </div>
           <span className="px-2 py-0.5 rounded-lg text-[9px] font-black bg-amber-500/10 text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-            7 AM – 4 PM WINDOW
+            7 AM – 4 PM
           </span>
         </div>
 
@@ -1032,20 +1032,20 @@ const Analytics = ({
         <div className="space-y-1.5 pt-1">
           <div className="grid grid-cols-4 gap-1 text-[8px] font-black text-center uppercase text-[#4A5568] dark:text-[#94A3B8]">
             <div className="p-1 rounded-lg bg-gray-50 dark:bg-white/5 border border-gray-200 dark:border-white/5">
-              <span className="text-[#00386D] dark:text-[#6699CC]">6:30 - 7:00 AM</span>
-              <div className="text-[7.5px] font-medium mt-0.5">Layout Prep</div>
+              <span className="text-[#00386D] dark:text-[#6699CC]">6:30 AM</span>
+              <div className="text-[7.5px] font-medium mt-0.5">Prep</div>
             </div>
-            <div className="p-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400">
-              <span>7 AM - 10 AM</span>
-              <div className="text-[7.5px] font-medium mt-0.5">Active Sun</div>
+            <div className="p-1 rounded-lg bg-[#6699CC]/15 border border-[#6699CC]/30 text-[#00386D] dark:text-[#6699CC]">
+              <span>7–10 AM</span>
+              <div className="text-[7.5px] font-medium mt-0.5">Morning</div>
             </div>
             <div className="p-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-black">
-              <span>10 AM - 2 PM</span>
-              <div className="text-[7.5px] font-bold mt-0.5">▲ Solar Peak</div>
+              <span>10 AM–2 PM</span>
+              <div className="text-[7.5px] font-bold mt-0.5">▲ Peak Sun</div>
             </div>
-            <div className="p-1 rounded-lg bg-teal-500/10 border border-teal-500/20 text-teal-600 dark:text-teal-400">
-              <span>2 PM - 4 PM</span>
-              <div className="text-[7.5px] font-medium mt-0.5">Final Evap</div>
+            <div className="p-1 rounded-lg bg-[#00386D]/10 dark:bg-[#6699CC]/15 border border-[#00386D]/20 dark:border-[#6699CC]/30 text-[#00386D] dark:text-[#6699CC]">
+              <span>2–4 PM</span>
+              <div className="text-[7.5px] font-medium mt-0.5">Afternoon</div>
             </div>
           </div>
         </div>
@@ -1060,14 +1060,14 @@ const Analytics = ({
         <div className="flex items-center justify-between">
           <div>
             <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] uppercase">
-              ECONOMIC IMPACT &amp; SPOILAGE PREVENTION
+              BATCH VALUE &amp; SAVINGS
             </div>
             <div className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5">
-              Batch Commercial Valuation &amp; Loss Safeguard
+              Financial Estimates
             </div>
           </div>
           <span className="px-2 py-0.5 rounded-lg text-[8.5px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
-            ROI ANALYZER • BFAR PNS
+            ESTIMATES
           </span>
         </div>
 
@@ -1077,9 +1077,8 @@ const Analytics = ({
           <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 space-y-2 overflow-hidden">
             <div className="flex items-center justify-between">
               <label className="text-[8.5px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">
-                BATCH WEIGHT (KG)
+                WEIGHT (KG)
               </label>
-              <span className="text-[8px] text-[#6699CC] font-bold">Standard Capacity</span>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -1095,7 +1094,7 @@ const Analytics = ({
             {/* Quick Presets Grid */}
             <div>
               <div className="text-[7.5px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1">
-                QUICK WEIGHT PRESETS:
+                Presets:
               </div>
               <div className="grid grid-cols-4 gap-1 w-full">
                 {['2.5', '5.0', '10.0', '15.0'].map((w) => (
@@ -1120,9 +1119,8 @@ const Analytics = ({
           <div className="p-3.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 space-y-2 overflow-hidden">
             <div className="flex items-center justify-between">
               <label className="text-[8.5px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">
-                MARKET PRICE (₱/KG)
+                PRICE (₱/KG)
               </label>
-              <span className="text-[8px] text-[#6699CC] font-bold">Cebu Market Standard</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-black text-[#00386D] dark:text-[#6699CC] shrink-0">₱</span>
@@ -1138,7 +1136,7 @@ const Analytics = ({
             {/* Quick Species Presets Grid */}
             <div>
               <div className="text-[7.5px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider mb-1">
-                SPECIES PRICE PRESETS:
+                Presets:
               </div>
               <div className="grid grid-cols-2 gap-1.5 w-full">
                 {[
@@ -1169,7 +1167,7 @@ const Analytics = ({
           <div className="p-2.5 rounded-2xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/15 flex flex-col justify-between">
             <div>
               <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">
-                BATCH GROSS VALUE
+                BATCH VALUE
               </div>
               <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
                 ₱{batchValuePesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1181,32 +1179,32 @@ const Analytics = ({
           </div>
 
           {/* Card 2: Loss Prevented */}
-          <div className="p-2.5 rounded-2xl bg-blue-500/5 dark:bg-blue-500/10 border border-blue-500/15 flex flex-col justify-between">
+          <div className="p-2.5 rounded-2xl bg-[#6699CC]/10 dark:bg-[#6699CC]/15 border border-[#6699CC]/25 flex flex-col justify-between">
             <div>
               <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">
-                SAFEGUARDED LOSS
+                RAIN SHIELDED
               </div>
-              <div className="text-sm font-black text-blue-600 dark:text-blue-400 mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
+              <div className="text-sm font-black text-[#00386D] dark:text-[#6699CC] mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
                 ₱{safeguardedLossPesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-            <div className="text-[7.5px] font-bold text-blue-600 dark:text-blue-400 mt-1">
-              {rainCount > 0 ? `${rainCount} rain closure shielded` : '30% post-harvest baseline saved'}
+            <div className="text-[7.5px] font-bold text-[#00386D] dark:text-[#6699CC] mt-1">
+              {rainCount > 0 ? `${rainCount} rain events shielded` : '30% spoilage saved'}
             </div>
           </div>
 
           {/* Card 3: Labor Saved */}
-          <div className="p-2.5 rounded-2xl bg-purple-500/5 dark:bg-purple-500/10 border border-purple-500/15 flex flex-col justify-between">
+          <div className="p-2.5 rounded-2xl bg-[#00386D]/5 dark:bg-[#00386D]/20 border border-[#00386D]/15 dark:border-white/10 flex flex-col justify-between">
             <div>
               <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">
-                LABOR SAVINGS
+                LABOR SAVED
               </div>
-              <div className="text-sm font-black text-purple-600 dark:text-purple-400 mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
+              <div className="text-sm font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
                 ₱{laborSavingsPesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
-            <div className="text-[7.5px] font-bold text-purple-600 dark:text-purple-400 mt-1">
-              {laborHoursFormatted} @ ₱{laborHourlyRate}/h wage
+            <div className="text-[7.5px] font-bold text-[#4A5568] dark:text-[#94A3B8] mt-1">
+              {laborHoursFormatted} @ ₱{laborHourlyRate}/hr
             </div>
           </div>
 
@@ -1214,31 +1212,31 @@ const Analytics = ({
           <div className="p-2.5 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/15 flex flex-col justify-between">
             <div>
               <div className="text-[8px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">
-                GRADE A PREMIUM
+                GRADE A BONUS
               </div>
               <div className="text-sm font-black text-amber-600 dark:text-amber-400 mt-0.5" style={{ fontFamily: 'Space Grotesk' }}>
                 +₱{gradeAPremiumPesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="text-[7.5px] font-bold text-amber-600 dark:text-amber-400 mt-1">
-              +15% commercial export margin
+              +15% export value
             </div>
           </div>
         </div>
 
         {/* Net Commercial Advantage Summary Banner */}
-        <div className="p-3 rounded-2xl bg-gradient-to-r from-[#00386D]/10 via-emerald-500/10 to-[#6699CC]/10 dark:from-[#00386D]/20 dark:via-emerald-500/20 dark:to-[#6699CC]/20 border border-[#00386D]/20 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="p-3 rounded-2xl bg-[#00386D]/5 dark:bg-[#00386D]/20 border border-[#00386D]/20 dark:border-white/10 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="text-center sm:text-left">
             <div className="text-[8.5px] font-bold text-[#4A5568] dark:text-[#94A3B8] uppercase tracking-wider">
-              NET COMMERCIAL BENEFIT PER BATCH
+              NET VALUE ADDED
             </div>
             <div className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC]">
-              +₱{netCommercialAdvantagePesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Extra Profit &amp; Labor Saved
+              +₱{netCommercialAdvantagePesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Total Advantage
             </div>
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-              ₱{safeguardedLossPesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Harvest Shielded
+              ₱{safeguardedLossPesos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Protected
             </span>
           </div>
         </div>
@@ -1260,8 +1258,8 @@ const Analytics = ({
               <span className="flex items-center gap-1 text-[#00386D] dark:text-[#6699CC]">
                 <span className="w-2 h-2 rounded-full bg-[#00386D] dark:bg-[#6699CC]" /> Temp (°C)
               </span>
-              <span className="flex items-center gap-1 text-teal-600 dark:text-teal-400">
-                <span className="w-2 h-2 rounded-full bg-teal-500" /> Humidity (%)
+              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" /> Humidity (%)
               </span>
             </div>
           </div>
@@ -1287,13 +1285,6 @@ const Analytics = ({
         {/* SVG Curve Graph */}
         <div className="relative pt-2">
           <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} className="w-full h-44 overflow-visible">
-            <defs>
-              <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#6699CC" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="#6699CC" stopOpacity="0.0" />
-              </linearGradient>
-            </defs>
-
             {/* Background Grid Lines */}
             {[0.25, 0.5, 0.75].map((pct, i) => (
               <line
@@ -1309,13 +1300,13 @@ const Analytics = ({
             ))}
 
             {/* Temperature Fill Area */}
-            <path d={tempAreaPath} fill="url(#tempGradient)" />
+            <path d={tempAreaPath} fill="#6699CC" fillOpacity="0.08" />
 
             {/* Humidity Line */}
             <path
               d={humPath}
               fill="none"
-              stroke="#14B8A6"
+              stroke="#10B981"
               strokeWidth="2.5"
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -1365,7 +1356,7 @@ const Analytics = ({
               >
                 <span className="text-[#6699CC]">{chartData[hoveredPoint].time}</span>
                 <span>Temp: {chartData[hoveredPoint].temperature}°C</span>
-                <span className="text-teal-400">Hum: {chartData[hoveredPoint].humidity}%</span>
+                <span className="text-emerald-400">Hum: {chartData[hoveredPoint].humidity}%</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -1386,27 +1377,27 @@ const Analytics = ({
         className="rounded-3xl border border-[#BDBCBD] dark:border-white/10 bg-white dark:bg-[#1A202C] p-5 shadow-sm space-y-3"
       >
         <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] uppercase">
-          {t('hardwareHealth') || 'HARDWARE DIAGNOSTICS'}
+          {t('hardwareHealth') || 'SYSTEM STATUS'}
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-xs">
           <div className="flex items-center justify-between p-2.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <span className="font-bold text-[#00386D] dark:text-[#F7FAFC]">ESP32-S3</span>
             <span className={`text-[10px] font-black ${isOnline ? 'text-emerald-500' : 'text-red-500'}`}>
-              {isOnline ? 'ONLINE (15ms)' : 'OFFLINE'}
+              {isOnline ? 'ONLINE' : 'OFFLINE'}
             </span>
           </div>
           <div className="flex items-center justify-between p-2.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
-            <span className="font-bold text-[#00386D] dark:text-[#F7FAFC]">DHT11 SENSOR</span>
-            <span className="text-[10px] font-black text-emerald-500">NOMINAL</span>
+            <span className="font-bold text-[#00386D] dark:text-[#F7FAFC]">TEMP &amp; HUMIDITY</span>
+            <span className="text-[10px] font-black text-emerald-500">READY</span>
           </div>
           <div className="flex items-center justify-between p-2.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
             <span className="font-bold text-[#00386D] dark:text-[#F7FAFC]">RAIN SENSOR</span>
-            <span className="text-[10px] font-black text-emerald-500">ARMED</span>
+            <span className="text-[10px] font-black text-emerald-500">READY</span>
           </div>
           <div className="flex items-center justify-between p-2.5 rounded-2xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5">
-            <span className="font-bold text-[#00386D] dark:text-[#F7FAFC]">FLIP SERVOS</span>
-            <span className="text-[10px] font-black text-emerald-500">SYNCED (0 stall)</span>
+            <span className="font-bold text-[#00386D] dark:text-[#F7FAFC]">TRAY SERVOS</span>
+            <span className="text-[10px] font-black text-emerald-500">READY</span>
           </div>
         </div>
       </motion.div>
@@ -1420,49 +1411,49 @@ const Analytics = ({
         <div className="flex items-center justify-between">
           <div>
             <div className="text-[10px] font-bold text-[#4A5568] dark:text-[#94A3B8] tracking-[0.1em] uppercase">
-              COMPLETED BATCH ARCHIVE
+              BATCH HISTORY
             </div>
             <div className="text-xs font-black text-[#00386D] dark:text-[#F7FAFC] mt-0.5">
-              Historical Drying Runs &amp; Quality Records
+              Past Drying Records
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => handleExportBatchPDF('all')}
-              title="Export all historical batches to PDF Report"
-              className="px-2 py-1 rounded-xl bg-red-600 dark:bg-red-500 text-white text-[9px] font-black uppercase tracking-wider hover:opacity-90 transition-opacity flex items-center gap-1"
+              title="Export all batches to PDF"
+              className="px-2 py-1 rounded-lg bg-[#00386D] dark:bg-[#6699CC] text-white text-[9px] font-bold uppercase tracking-wider hover:opacity-90 transition-all flex items-center gap-1"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
-              <span>EXPORT ALL (.PDF)</span>
+              <span>PDF</span>
             </button>
             <button
               type="button"
               onClick={() => handleExportBatchCSV('all')}
-              title="Export all historical batches to Excel/CSV"
-              className="px-2 py-1 rounded-xl bg-emerald-600 dark:bg-emerald-500 text-white text-[9px] font-black uppercase tracking-wider hover:opacity-90 transition-opacity flex items-center gap-1"
+              title="Export all batches to CSV"
+              className="px-2 py-1 rounded-lg bg-[#00386D] dark:bg-[#6699CC] text-white text-[9px] font-bold uppercase tracking-wider hover:opacity-90 transition-all flex items-center gap-1"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
-              <span>EXPORT ALL (.CSV)</span>
+              <span>CSV</span>
             </button>
             <button
               type="button"
               onClick={handleSaveCurrentBatch}
-              className="px-2 py-1 rounded-xl bg-[#00386D] dark:bg-[#6699CC] text-white text-[9px] font-black uppercase tracking-wider hover:opacity-90 transition-opacity"
+              className="px-2 py-1 rounded-lg bg-[#00386D] dark:bg-[#6699CC] text-white text-[9px] font-bold uppercase tracking-wider hover:opacity-90 transition-all flex items-center gap-1"
             >
-              + SAVE RUN
+              <span>+ SAVE</span>
             </button>
             {savedBatches.length > 0 && (
               <button
                 type="button"
                 onClick={handleClearHistory}
-                className="px-2 py-1 rounded-xl bg-gray-100 dark:bg-white/5 text-[#4A5568] dark:text-[#94A3B8] text-[9px] font-bold hover:text-red-500 transition-colors"
+                className="px-2 py-1 rounded-lg bg-[#00386D] dark:bg-[#6699CC] text-white text-[9px] font-bold uppercase tracking-wider hover:opacity-90 transition-all flex items-center gap-1"
               >
-                CLEAR
+                <span>CLEAR</span>
               </button>
             )}
           </div>
@@ -1554,7 +1545,7 @@ const Analytics = ({
                           type="button"
                           onClick={() => handleExportBatchPDF(item)}
                           title={`Download ${item.id} PDF Report`}
-                          className="px-1.5 py-1 rounded bg-red-500/10 hover:bg-red-600 hover:text-white text-red-600 dark:text-red-400 font-black text-[7.5px] transition-colors"
+                          className="px-1.5 py-1 rounded bg-[#00386D]/10 dark:bg-[#6699CC]/20 hover:bg-[#00386D] hover:text-white dark:hover:bg-[#6699CC] dark:hover:text-white text-[#00386D] dark:text-[#6699CC] font-black text-[7.5px] transition-colors"
                         >
                           PDF
                         </button>
