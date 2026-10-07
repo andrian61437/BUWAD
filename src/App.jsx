@@ -759,10 +759,10 @@ function AppContent() {
                       transition={{ type: 'spring', stiffness: 500, damping: 30 }} 
                     />
                   )}
-                  <span className={`text-base sm:text-lg relative z-10 leading-none ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  <span className={`text-sm sm:text-base relative z-10 leading-none ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
                     {item.icon}
                   </span>
-                  <span className={`text-[9.5px] sm:text-[11px] font-black tracking-tight sm:tracking-normal relative z-10 w-full text-center truncate px-0.5 block leading-tight ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
+                  <span className={`text-[8.5px] sm:text-[9.5px] font-black tracking-normal relative z-10 w-full text-center truncate px-0.5 block leading-tight ${activeTab === item.id ? 'text-[#00386D] dark:text-[#6699CC]' : 'text-[#4A5568] dark:text-[#94A3B8]'}`}>
                     {item.label}
                   </span>
                 </motion.button>
